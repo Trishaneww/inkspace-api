@@ -1,0 +1,27 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test + coverage
+*.test
+*.out
+coverage.*
+
+# Env
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# sqlc generated (uncomment if you decide to gitignore generated code)
+# internal/database/sqlc/
+
+# Docker volumes
+.docker-data/
