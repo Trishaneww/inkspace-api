@@ -27,7 +27,11 @@ func New(cfg *config.Config, log *slog.Logger, db *pgxpool.Pool, pub *events.Pub
 	}
 
 	engine := gin.New()
-	engine.Use(middleware.Recover(log), middleware.Logger(log))
+	engine.Use(
+		middleware.Recover(log),
+		middleware.Logger(log),
+		middleware.CORS(cfg.CORSAllowedOrigins),
+	)
 
 	engine.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})

@@ -21,6 +21,7 @@ func NewPublisher(url string) (*Publisher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial rabbitmq: %w", err)
 	}
+
 	ch, err := conn.Channel()
 	if err != nil {
 		conn.Close()

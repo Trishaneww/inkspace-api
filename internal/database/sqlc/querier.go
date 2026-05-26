@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	ClaimFlashDesign(ctx context.Context, id uuid.UUID) (FlashDesign, error)
+	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
 	CreateBooking(ctx context.Context, arg CreateBookingParams) (Booking, error)
@@ -19,17 +20,20 @@ type Querier interface {
 	CreateFlashDesign(ctx context.Context, arg CreateFlashDesignParams) (FlashDesign, error)
 	CreateMatchRequest(ctx context.Context, arg CreateMatchRequestParams) (MatchRequest, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
+	CreatePhoneVerification(ctx context.Context, arg CreatePhoneVerificationParams) (PhoneVerification, error)
 	CreatePortfolioItem(ctx context.Context, arg CreatePortfolioItemParams) (PortfolioItem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteArtist(ctx context.Context, id uuid.UUID) error
 	DeleteBooking(ctx context.Context, id uuid.UUID) error
+	DeleteExpiredPhoneVerifications(ctx context.Context) (int64, error)
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
 	DeleteFlashDesign(ctx context.Context, id uuid.UUID) error
 	DeletePortfolioItem(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	ExpireOpenMatchRequests(ctx context.Context) (int64, error)
 	FindConversationForPair(ctx context.Context, arg FindConversationForPairParams) (Conversation, error)
+	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistAvailability(ctx context.Context, artistID uuid.UUID) (ArtistAvailability, error)
 	GetArtistByHandle(ctx context.Context, handle string) (Artist, error)
@@ -48,6 +52,8 @@ type Querier interface {
 	GetReadCursor(ctx context.Context, arg GetReadCursorParams) (ConversationReadCursor, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserByPhone(ctx context.Context, phone *string) (User, error)
+	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
 	InsertBookingStatusHistory(ctx context.Context, arg InsertBookingStatusHistoryParams) (BookingStatusHistory, error)
 	InsertMatch(ctx context.Context, arg InsertMatchParams) (Match, error)
 	InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error)
@@ -75,9 +81,15 @@ type Querier interface {
 	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 	MarkNotificationRead(ctx context.Context, id uuid.UUID) error
+	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
 	MarkWebhookProcessed(ctx context.Context, id uuid.UUID) error
+	// Used when the user requests a resend. Rotates the code on the same
+	// verification record (preserving its id, so the frontend's stored
+	// verificationId keeps working) and resets the attempt counter.
+	RefreshPhoneVerificationCode(ctx context.Context, arg RefreshPhoneVerificationCodeParams) error
 	ReleaseFlashReservation(ctx context.Context, id uuid.UUID) (FlashDesign, error)
 	ReserveFlashDesign(ctx context.Context, arg ReserveFlashDesignParams) (FlashDesign, error)
+	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	TouchConversationLastMessageAt(ctx context.Context, id uuid.UUID) error
@@ -91,6 +103,10 @@ type Querier interface {
 	UpdateMatchStatus(ctx context.Context, arg UpdateMatchStatusParams) (Match, error)
 	UpdatePaymentStatus(ctx context.Context, arg UpdatePaymentStatusParams) (Payment, error)
 	UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error)
+	// Used when an in-progress signup re-submits with corrected data
+	// (e.g. typo'd phone number). Only updates rows where the phone has
+	// not yet been verified.
+	UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertArtistAvailability(ctx context.Context, arg UpsertArtistAvailabilityParams) (ArtistAvailability, error)
 	UpsertNotificationPreferences(ctx context.Context, arg UpsertNotificationPreferencesParams) (NotificationPreference, error)

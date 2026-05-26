@@ -178,6 +178,17 @@ type PaymentWebhookEvent struct {
 	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
+type PhoneVerification struct {
+	ID         uuid.UUID          `json:"id"`
+	UserID     uuid.UUID          `json:"user_id"`
+	Phone      string             `json:"phone"`
+	CodeHash   string             `json:"code_hash"`
+	Attempts   int32              `json:"attempts"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt pgtype.Timestamptz `json:"consumed_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type PortfolioItem struct {
 	ID          uuid.UUID          `json:"id"`
 	ArtistID    uuid.UUID          `json:"artist_id"`
@@ -208,4 +219,8 @@ type User struct {
 	EmailVerifiedAt pgtype.Timestamptz `json:"email_verified_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	FirstName       *string            `json:"first_name"`
+	LastName        *string            `json:"last_name"`
+	Phone           *string            `json:"phone"`
+	PhoneVerifiedAt pgtype.Timestamptz `json:"phone_verified_at"`
 }

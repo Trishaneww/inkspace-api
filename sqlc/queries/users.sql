@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO users (email, password_hash, role)
-VALUES ($1, $2, $3)
+INSERT INTO users (email, password_hash, role, first_name, last_name, phone)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetUserByID :one
@@ -9,17 +9,40 @@ SELECT * FROM users WHERE id = $1;
 -- name: GetUserByEmail :one
 SELECT * FROM users WHERE email = $1;
 
+-- name: GetUserByPhone :one
+SELECT * FROM users WHERE phone = $1;
+
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = $2,
     updated_at = now()
 WHERE id = $1;
 
+-- name: UpdateUnverifiedUser :one
+-- Used when an in-progress signup re-submits with corrected data
+-- (e.g. typo'd phone number). Only updates rows where the phone has
+-- not yet been verified.
+UPDATE users
+SET password_hash = $2,
+    role          = $3,
+    first_name    = $4,
+    last_name     = $5,
+    phone         = $6,
+    updated_at    = now()
+WHERE id = $1 AND phone_verified_at IS NULL
+RETURNING *;
+
 -- name: MarkEmailVerified :exec
 UPDATE users
 SET email_verified_at = now(),
     updated_at = now()
 WHERE id = $1 AND email_verified_at IS NULL;
+
+-- name: MarkPhoneVerified :exec
+UPDATE users
+SET phone_verified_at = now(),
+    updated_at = now()
+WHERE id = $1 AND phone_verified_at IS NULL;
 
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = $1;

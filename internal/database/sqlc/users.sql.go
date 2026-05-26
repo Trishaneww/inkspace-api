@@ -50,19 +50,29 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, password_hash, role)
-VALUES ($1, $2, $3)
-RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at
+INSERT INTO users (email, password_hash, role, first_name, last_name, phone)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at
 `
 
 type CreateUserParams struct {
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	Role         string `json:"role"`
+	Email        string  `json:"email"`
+	PasswordHash string  `json:"password_hash"`
+	Role         string  `json:"role"`
+	FirstName    *string `json:"first_name"`
+	LastName     *string `json:"last_name"`
+	Phone        *string `json:"phone"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash, arg.Role)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Role,
+		arg.FirstName,
+		arg.LastName,
+		arg.Phone,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -72,6 +82,10 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
 	)
 	return i, err
 }
@@ -122,7 +136,7 @@ func (q *Queries) GetActiveRefreshTokenByHash(ctx context.Context, tokenHash str
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -136,12 +150,16 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -155,6 +173,33 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
+	)
+	return i, err
+}
+
+const getUserByPhone = `-- name: GetUserByPhone :one
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at FROM users WHERE phone = $1
+`
+
+func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByPhone, phone)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.EmailVerifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
 	)
 	return i, err
 }
@@ -168,6 +213,18 @@ WHERE id = $1 AND email_verified_at IS NULL
 
 func (q *Queries) MarkEmailVerified(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, markEmailVerified, id)
+	return err
+}
+
+const markPhoneVerified = `-- name: MarkPhoneVerified :exec
+UPDATE users
+SET phone_verified_at = now(),
+    updated_at = now()
+WHERE id = $1 AND phone_verified_at IS NULL
+`
+
+func (q *Queries) MarkPhoneVerified(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markPhoneVerified, id)
 	return err
 }
 
@@ -191,6 +248,56 @@ WHERE token_hash = $1
 func (q *Queries) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
 	_, err := q.db.Exec(ctx, revokeRefreshToken, tokenHash)
 	return err
+}
+
+const updateUnverifiedUser = `-- name: UpdateUnverifiedUser :one
+UPDATE users
+SET password_hash = $2,
+    role          = $3,
+    first_name    = $4,
+    last_name     = $5,
+    phone         = $6,
+    updated_at    = now()
+WHERE id = $1 AND phone_verified_at IS NULL
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at
+`
+
+type UpdateUnverifiedUserParams struct {
+	ID           uuid.UUID `json:"id"`
+	PasswordHash string    `json:"password_hash"`
+	Role         string    `json:"role"`
+	FirstName    *string   `json:"first_name"`
+	LastName     *string   `json:"last_name"`
+	Phone        *string   `json:"phone"`
+}
+
+// Used when an in-progress signup re-submits with corrected data
+// (e.g. typo'd phone number). Only updates rows where the phone has
+// not yet been verified.
+func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUnverifiedUser,
+		arg.ID,
+		arg.PasswordHash,
+		arg.Role,
+		arg.FirstName,
+		arg.LastName,
+		arg.Phone,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.EmailVerifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FirstName,
+		&i.LastName,
+		&i.Phone,
+		&i.PhoneVerifiedAt,
+	)
+	return i, err
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec

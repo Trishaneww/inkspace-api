@@ -1,14 +1,36 @@
 package auth
 
 import (
-	"github.com/jackc/pgx/v5"
+	"context"
+
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 )
 
 type Repository interface {
-	// TODO: CreateUser, GetUserByEmail, GetUserByID, UpdateUserPassword, MarkEmailVerified,
-	// TODO: CreateRefreshToken, GetActiveRefreshTokenByHash, RevokeRefreshToken, RevokeAllRefreshTokensForUser
+	CreateUser(ctx context.Context, arg sqlc.CreateUserParams) (sqlc.User, error)
+	UpdateUnverifiedUser(ctx context.Context, arg sqlc.UpdateUnverifiedUserParams) (sqlc.User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error)
+	GetUserByEmail(ctx context.Context, email string) (sqlc.User, error)
+	GetUserByPhone(ctx context.Context, phone *string) (sqlc.User, error)
+	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
+
+	CreatePhoneVerification(
+		ctx context.Context,
+		arg sqlc.CreatePhoneVerificationParams,
+	) (sqlc.PhoneVerification, error)
+	GetActivePhoneVerification(
+		ctx context.Context,
+		id uuid.UUID,
+	) (sqlc.PhoneVerification, error)
+	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
+	RefreshPhoneVerificationCode(
+		ctx context.Context,
+		arg sqlc.RefreshPhoneVerificationCodeParams,
+	) error
+	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
+	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 }
 
 type repository struct {
@@ -20,6 +42,76 @@ func NewRepository(db *pgxpool.Pool) Repository {
 	return &repository{db: db, q: sqlc.New(db)}
 }
 
-func (r *repository) withTx(tx pgx.Tx) *repository {
-	return &repository{db: r.db, q: r.q.WithTx(tx)}
+func (r *repository) CreateUser(
+	ctx context.Context, arg sqlc.CreateUserParams,
+) (sqlc.User, error) {
+	return r.q.CreateUser(ctx, arg)
+}
+
+func (r *repository) UpdateUnverifiedUser(
+	ctx context.Context, arg sqlc.UpdateUnverifiedUserParams,
+) (sqlc.User, error) {
+	return r.q.UpdateUnverifiedUser(ctx, arg)
+}
+
+func (r *repository) GetUserByID(
+	ctx context.Context, id uuid.UUID,
+) (sqlc.User, error) {
+	return r.q.GetUserByID(ctx, id)
+}
+
+func (r *repository) GetUserByEmail(
+	ctx context.Context, email string,
+) (sqlc.User, error) {
+	return r.q.GetUserByEmail(ctx, email)
+}
+
+func (r *repository) GetUserByPhone(
+	ctx context.Context, phone *string,
+) (sqlc.User, error) {
+	return r.q.GetUserByPhone(ctx, phone)
+}
+
+func (r *repository) MarkPhoneVerified(
+	ctx context.Context, id uuid.UUID,
+) error {
+	return r.q.MarkPhoneVerified(ctx, id)
+}
+
+func (r *repository) CreatePhoneVerification(
+	ctx context.Context,
+	arg sqlc.CreatePhoneVerificationParams,
+) (sqlc.PhoneVerification, error) {
+	return r.q.CreatePhoneVerification(ctx, arg)
+}
+
+func (r *repository) GetActivePhoneVerification(
+	ctx context.Context, id uuid.UUID,
+) (sqlc.PhoneVerification, error) {
+	return r.q.GetActivePhoneVerification(ctx, id)
+}
+
+func (r *repository) IncrementPhoneVerificationAttempts(
+	ctx context.Context, id uuid.UUID,
+) error {
+	return r.q.IncrementPhoneVerificationAttempts(ctx, id)
+}
+
+func (r *repository) RefreshPhoneVerificationCode(
+	ctx context.Context,
+	arg sqlc.RefreshPhoneVerificationCodeParams,
+) error {
+	return r.q.RefreshPhoneVerificationCode(ctx, arg)
+}
+
+func (r *repository) ConsumePhoneVerification(
+	ctx context.Context, id uuid.UUID,
+) error {
+	return r.q.ConsumePhoneVerification(ctx, id)
+}
+
+func (r *repository) RevokeActivePhoneVerificationsForUser(
+	ctx context.Context, userID uuid.UUID,
+) error {
+	return r.q.RevokeActivePhoneVerificationsForUser(ctx, userID)
 }
