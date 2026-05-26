@@ -33,44 +33,6 @@ type ArtistAvailability struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
-type Booking struct {
-	ID                 uuid.UUID          `json:"id"`
-	ClientID           uuid.UUID          `json:"client_id"`
-	ArtistID           uuid.UUID          `json:"artist_id"`
-	Status             string             `json:"status"`
-	Notes              string             `json:"notes"`
-	EstimatedHours     pgtype.Numeric     `json:"estimated_hours"`
-	DepositAmountCents int64              `json:"deposit_amount_cents"`
-	ScheduledFor       pgtype.Timestamptz `json:"scheduled_for"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-}
-
-type BookingStatusHistory struct {
-	ID         uuid.UUID          `json:"id"`
-	BookingID  uuid.UUID          `json:"booking_id"`
-	FromStatus *string            `json:"from_status"`
-	ToStatus   string             `json:"to_status"`
-	ChangedBy  pgtype.UUID        `json:"changed_by"`
-	Note       *string            `json:"note"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-}
-
-type Conversation struct {
-	ID            uuid.UUID          `json:"id"`
-	ClientID      uuid.UUID          `json:"client_id"`
-	ArtistID      uuid.UUID          `json:"artist_id"`
-	BookingID     pgtype.UUID        `json:"booking_id"`
-	LastMessageAt pgtype.Timestamptz `json:"last_message_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-}
-
-type ConversationReadCursor struct {
-	ConversationID uuid.UUID          `json:"conversation_id"`
-	UserID         uuid.UUID          `json:"user_id"`
-	LastReadAt     pgtype.Timestamptz `json:"last_read_at"`
-}
-
 type FlashDesign struct {
 	ID            uuid.UUID          `json:"id"`
 	ArtistID      uuid.UUID          `json:"artist_id"`
@@ -88,94 +50,6 @@ type FlashDesign struct {
 	ReservedUntil pgtype.Timestamptz `json:"reserved_until"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-}
-
-type Match struct {
-	ID        uuid.UUID          `json:"id"`
-	RequestID uuid.UUID          `json:"request_id"`
-	ArtistID  uuid.UUID          `json:"artist_id"`
-	Score     float64            `json:"score"`
-	Status    string             `json:"status"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-}
-
-type MatchRequest struct {
-	ID             uuid.UUID          `json:"id"`
-	ClientID       uuid.UUID          `json:"client_id"`
-	Description    string             `json:"description"`
-	ReferenceUrls  []string           `json:"reference_urls"`
-	Styles         []string           `json:"styles"`
-	Placement      *string            `json:"placement"`
-	SizeInches     pgtype.Numeric     `json:"size_inches"`
-	BudgetMinCents *int64             `json:"budget_min_cents"`
-	BudgetMaxCents *int64             `json:"budget_max_cents"`
-	City           *string            `json:"city"`
-	Country        *string            `json:"country"`
-	Status         string             `json:"status"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-}
-
-type Message struct {
-	ID             uuid.UUID          `json:"id"`
-	ConversationID uuid.UUID          `json:"conversation_id"`
-	SenderID       uuid.UUID          `json:"sender_id"`
-	Body           string             `json:"body"`
-	Attachments    []string           `json:"attachments"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-}
-
-type Notification struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    uuid.UUID          `json:"user_id"`
-	Kind      string             `json:"kind"`
-	Title     string             `json:"title"`
-	Body      string             `json:"body"`
-	Data      []byte             `json:"data"`
-	ReadAt    pgtype.Timestamptz `json:"read_at"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-type NotificationDelivery struct {
-	ID             uuid.UUID          `json:"id"`
-	NotificationID uuid.UUID          `json:"notification_id"`
-	Channel        string             `json:"channel"`
-	Status         string             `json:"status"`
-	Error          *string            `json:"error"`
-	AttemptedAt    pgtype.Timestamptz `json:"attempted_at"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-}
-
-type NotificationPreference struct {
-	UserID     uuid.UUID          `json:"user_id"`
-	Enabled    []byte             `json:"enabled"`
-	QuietHours []byte             `json:"quiet_hours"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-}
-
-type Payment struct {
-	ID               uuid.UUID          `json:"id"`
-	BookingID        uuid.UUID          `json:"booking_id"`
-	PayerID          uuid.UUID          `json:"payer_id"`
-	PayeeID          uuid.UUID          `json:"payee_id"`
-	Kind             string             `json:"kind"`
-	AmountCents      int64              `json:"amount_cents"`
-	Currency         string             `json:"currency"`
-	Status           string             `json:"status"`
-	Provider         string             `json:"provider"`
-	ProviderIntentID string             `json:"provider_intent_id"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-}
-
-type PaymentWebhookEvent struct {
-	ID         uuid.UUID          `json:"id"`
-	Provider   string             `json:"provider"`
-	EventID    string             `json:"event_id"`
-	Payload    []byte             `json:"payload"`
-	Processed  bool               `json:"processed"`
-	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
 type PhoneVerification struct {

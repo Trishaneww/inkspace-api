@@ -13,76 +13,35 @@ import (
 type Querier interface {
 	ClaimFlashDesign(ctx context.Context, id uuid.UUID) (FlashDesign, error)
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
-	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
 	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
-	CreateBooking(ctx context.Context, arg CreateBookingParams) (Booking, error)
-	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateFlashDesign(ctx context.Context, arg CreateFlashDesignParams) (FlashDesign, error)
-	CreateMatchRequest(ctx context.Context, arg CreateMatchRequestParams) (MatchRequest, error)
-	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreatePhoneVerification(ctx context.Context, arg CreatePhoneVerificationParams) (PhoneVerification, error)
 	CreatePortfolioItem(ctx context.Context, arg CreatePortfolioItemParams) (PortfolioItem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteArtist(ctx context.Context, id uuid.UUID) error
-	DeleteBooking(ctx context.Context, id uuid.UUID) error
 	DeleteExpiredPhoneVerifications(ctx context.Context) (int64, error)
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
 	DeleteFlashDesign(ctx context.Context, id uuid.UUID) error
 	DeletePortfolioItem(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
-	ExpireOpenMatchRequests(ctx context.Context) (int64, error)
-	FindConversationForPair(ctx context.Context, arg FindConversationForPairParams) (Conversation, error)
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistAvailability(ctx context.Context, artistID uuid.UUID) (ArtistAvailability, error)
 	GetArtistByHandle(ctx context.Context, handle string) (Artist, error)
 	GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
-	GetBookingByID(ctx context.Context, id uuid.UUID) (Booking, error)
-	GetConversationByID(ctx context.Context, id uuid.UUID) (Conversation, error)
 	GetFlashDesign(ctx context.Context, id uuid.UUID) (FlashDesign, error)
-	GetMatchByID(ctx context.Context, id uuid.UUID) (Match, error)
-	GetMatchRequestByID(ctx context.Context, id uuid.UUID) (MatchRequest, error)
-	GetNotificationByID(ctx context.Context, id uuid.UUID) (Notification, error)
-	GetNotificationPreferences(ctx context.Context, userID uuid.UUID) (NotificationPreference, error)
-	GetPaymentByID(ctx context.Context, id uuid.UUID) (Payment, error)
-	GetPaymentByProviderIntent(ctx context.Context, arg GetPaymentByProviderIntentParams) (Payment, error)
 	GetPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
-	GetReadCursor(ctx context.Context, arg GetReadCursorParams) (ConversationReadCursor, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByPhone(ctx context.Context, phone *string) (User, error)
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
-	InsertBookingStatusHistory(ctx context.Context, arg InsertBookingStatusHistoryParams) (BookingStatusHistory, error)
-	InsertMatch(ctx context.Context, arg InsertMatchParams) (Match, error)
-	InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error)
-	InsertNotification(ctx context.Context, arg InsertNotificationParams) (Notification, error)
-	InsertNotificationDelivery(ctx context.Context, arg InsertNotificationDeliveryParams) (NotificationDelivery, error)
-	InsertWebhookEvent(ctx context.Context, arg InsertWebhookEventParams) (PaymentWebhookEvent, error)
 	ListArtists(ctx context.Context, arg ListArtistsParams) ([]Artist, error)
-	ListBookingStatusHistory(ctx context.Context, bookingID uuid.UUID) ([]BookingStatusHistory, error)
-	ListBookingsByArtist(ctx context.Context, arg ListBookingsByArtistParams) ([]Booking, error)
-	ListBookingsByClient(ctx context.Context, arg ListBookingsByClientParams) ([]Booking, error)
-	ListConversationsForArtist(ctx context.Context, arg ListConversationsForArtistParams) ([]Conversation, error)
-	ListConversationsForClient(ctx context.Context, arg ListConversationsForClientParams) ([]Conversation, error)
 	ListFlashDesigns(ctx context.Context, arg ListFlashDesignsParams) ([]FlashDesign, error)
-	ListLeadsForArtist(ctx context.Context, arg ListLeadsForArtistParams) ([]ListLeadsForArtistRow, error)
-	ListMatchRequestsByClient(ctx context.Context, arg ListMatchRequestsByClientParams) ([]MatchRequest, error)
-	ListMatchesByRequest(ctx context.Context, requestID uuid.UUID) ([]Match, error)
-	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
-	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]Notification, error)
-	ListPaymentsByBooking(ctx context.Context, bookingID uuid.UUID) ([]Payment, error)
-	ListPaymentsByPayee(ctx context.Context, arg ListPaymentsByPayeeParams) ([]Payment, error)
-	ListPaymentsByPayer(ctx context.Context, arg ListPaymentsByPayerParams) ([]Payment, error)
-	ListPendingDeliveries(ctx context.Context, limit int32) ([]NotificationDelivery, error)
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
-	ListUnprocessedWebhookEvents(ctx context.Context, limit int32) ([]PaymentWebhookEvent, error)
-	MarkAllNotificationsRead(ctx context.Context, userID uuid.UUID) (int64, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
-	MarkNotificationRead(ctx context.Context, id uuid.UUID) error
 	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
-	MarkWebhookProcessed(ctx context.Context, id uuid.UUID) error
 	// Used when the user requests a resend. Rotates the code on the same
 	// verification record (preserving its id, so the frontend's stored
 	// verificationId keeps working) and resets the attempt counter.
@@ -92,16 +51,8 @@ type Querier interface {
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
-	TouchConversationLastMessageAt(ctx context.Context, id uuid.UUID) error
 	UpdateArtist(ctx context.Context, arg UpdateArtistParams) (Artist, error)
-	UpdateBookingNotes(ctx context.Context, arg UpdateBookingNotesParams) (Booking, error)
-	UpdateBookingSchedule(ctx context.Context, arg UpdateBookingScheduleParams) (Booking, error)
-	UpdateBookingStatus(ctx context.Context, arg UpdateBookingStatusParams) (Booking, error)
-	UpdateDeliveryStatus(ctx context.Context, arg UpdateDeliveryStatusParams) error
 	UpdateFlashDesign(ctx context.Context, arg UpdateFlashDesignParams) (FlashDesign, error)
-	UpdateMatchRequestStatus(ctx context.Context, arg UpdateMatchRequestStatusParams) error
-	UpdateMatchStatus(ctx context.Context, arg UpdateMatchStatusParams) (Match, error)
-	UpdatePaymentStatus(ctx context.Context, arg UpdatePaymentStatusParams) (Payment, error)
 	UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error)
 	// Used when an in-progress signup re-submits with corrected data
 	// (e.g. typo'd phone number). Only updates rows where the phone has
@@ -109,8 +60,6 @@ type Querier interface {
 	UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertArtistAvailability(ctx context.Context, arg UpsertArtistAvailabilityParams) (ArtistAvailability, error)
-	UpsertNotificationPreferences(ctx context.Context, arg UpsertNotificationPreferencesParams) (NotificationPreference, error)
-	UpsertReadCursor(ctx context.Context, arg UpsertReadCursorParams) (ConversationReadCursor, error)
 }
 
 var _ Querier = (*Queries)(nil)
