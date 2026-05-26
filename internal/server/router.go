@@ -8,7 +8,6 @@ import (
 
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/artists"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/auth"
-	"github.com/trishaneupnexx/inkspace-api/internal/modules/notifications"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/portfolios"
 )
 
@@ -17,6 +16,5 @@ func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pu
 
 	auth.New(cfg, db, pub).RegisterRoutes(api)
 	artists.New(cfg, db, pub).RegisterRoutes(api)
-	notifications.New(cfg, db, pub).RegisterRoutes(api)
 	portfolios.New(cfg, db, pub).RegisterRoutes(api)
 }
