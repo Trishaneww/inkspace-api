@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
+	"os"
 	"strings"
 	"time"
 
@@ -20,8 +22,6 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
 )
 
-// ── Sentinel errors — handlers map these to HTTP codes ───────────
-
 var (
 	ErrInvalidCredentials          = errors.New("invalid credentials")
 	ErrEmailTaken                  = errors.New("email already in use")
@@ -33,8 +33,6 @@ var (
 	ErrProviderNotImplemented      = errors.New("oauth provider integration not implemented")
 )
 
-// ── Service ──────────────────────────────────────────────────────
-
 type Service interface {
 	Register(ctx context.Context, in RegisterInput) (*PhoneVerificationRequiredResponse, error)
 	Login(ctx context.Context, in LoginInput) (interface{}, error)
@@ -42,7 +40,7 @@ type Service interface {
 	ResendPhoneCode(ctx context.Context, in ResendPhoneInput) error
 	OAuthCallback(ctx context.Context, in OAuthCallbackInput) (interface{}, error)
 	CompleteOAuthSignup(ctx context.Context, in OAuthCompleteInput) (*PhoneVerificationRequiredResponse, error)
-	Me(ctx context.Context, userID uuid.UUID) (*User, error)
+	GetCurrentUser(ctx context.Context, userID uuid.UUID) (*User, error)
 	Logout(ctx context.Context, userID uuid.UUID) error
 }
 
@@ -56,7 +54,6 @@ func NewService(cfg *config.Config, repo Repository, pub *events.Publisher) Serv
 	return &service{cfg: cfg, repo: repo, events: pub}
 }
 
-// ── Register ─────────────────────────────────────────────────────
 
 func (s *service) Register(
 	ctx context.Context, in RegisterInput,
@@ -200,9 +197,7 @@ func (s *service) issuePhoneVerification(
 		return nil, err
 	}
 
-	// Per product spec: log to stdout instead of sending via Vonage.
-	// Swap with a real SMS provider call once VONAGE_API_KEY is set.
-	log.Printf(
+	fmt.Fprintf(os.Stderr,
 		"\n"+
 			"✅ ═════════════════════════════════════════════════════ ✅\n"+
 			"   ✅✅✅  PHONE VERIFICATION CODE: %s  ✅✅✅\n"+
@@ -223,8 +218,6 @@ func (s *service) issuePhoneVerification(
 		MaskedPhone:    maskPhone(*user.Phone),
 	}, nil
 }
-
-// ── Verify phone code ────────────────────────────────────────────
 
 func (s *service) VerifyPhone(
 	ctx context.Context, in VerifyPhoneInput,
@@ -274,15 +267,9 @@ func (s *service) VerifyPhone(
 	return &AuthenticatedResponse{
 		Status: "authenticated",
 		Token:  token,
-		User:   toAPIUser(user),
+		User:   userFromRecord(user),
 	}, nil
 }
-
-// ── Resend phone code ────────────────────────────────────────────
-//
-// Rotates the code on the EXISTING verification rather than creating a
-// new row. This keeps the verificationId stable on the frontend so the
-// user's next submit still finds the active verification.
 
 func (s *service) ResendPhoneCode(
 	ctx context.Context, in ResendPhoneInput,
@@ -322,7 +309,7 @@ func (s *service) ResendPhoneCode(
 		return err
 	}
 
-	log.Printf(
+	fmt.Fprintf(os.Stderr,
 		"\n"+
 			"♻️ ═════════════════════════════════════════════════════ ♻️\n"+
 			"   ♻️♻️♻️  RESENT PHONE VERIFICATION CODE: %s  ♻️♻️♻️\n"+
@@ -339,15 +326,6 @@ func (s *service) ResendPhoneCode(
 	return nil
 }
 
-// ── OAuth ────────────────────────────────────────────────────────
-//
-// Scaffolded shape. Real provider integration (token exchange + id_token
-// verification + user upsert) lands when credentials are available.
-
-// OAuthCallback returns one of two response shapes:
-//   - AuthenticatedResponse                  → email already maps to a full user, just log them in
-//   - OAuthCompleteProfileRequiredResponse   → new user; frontend prefills the signup form and
-//                                              calls CompleteOAuthSignup once they pick a password/phone/role
 func (s *service) OAuthCallback(
 	ctx context.Context, in OAuthCallbackInput,
 ) (interface{}, error) {
@@ -381,12 +359,9 @@ func (s *service) OAuthCallback(
 		return &AuthenticatedResponse{
 			Status: "authenticated",
 			Token:  token,
-			User:   toAPIUser(user),
+			User:   userFromRecord(user),
 		}, nil
 	case errors.Is(err, pgx.ErrNoRows):
-		// First-time OAuth signup. Sign a short-lived session that
-		// carries the verified claims; the frontend echoes it back to
-		// CompleteOAuthSignup with the rest of the profile.
 		sessionTok, err := signOAuthSession(s.cfg, claims, in.Provider)
 		if err != nil {
 			return nil, err
@@ -403,9 +378,6 @@ func (s *service) OAuthCallback(
 	}
 }
 
-// CompleteOAuthSignup finalizes a first-time OAuth user: validates the
-// session token issued by OAuthCallback, creates the row with the
-// password/phone/role they just entered, and starts the phone OTP flow.
 func (s *service) CompleteOAuthSignup(
 	ctx context.Context, in OAuthCompleteInput,
 ) (*PhoneVerificationRequiredResponse, error) {
@@ -414,14 +386,11 @@ func (s *service) CompleteOAuthSignup(
 		return nil, ErrInvalidCredentials
 	}
 
-	// Email is taken from the signed OAuth session token (unspoofable);
-	// first/last name are user-editable on the prefilled signup form so
-	// we trust the form-submitted values.
 	email := strings.ToLower(strings.TrimSpace(claims.Email))
 	phone := strings.TrimSpace(in.Phone)
 	firstName := strings.TrimSpace(in.FirstName)
 	lastName := strings.TrimSpace(in.LastName)
-	_ = claims // .Subject still useful once oauth_identities table lands
+	_ = claims 
 
 	hashBytes, err := bcrypt.GenerateFromPassword(
 		[]byte(in.Password), bcrypt.DefaultCost,
@@ -431,7 +400,6 @@ func (s *service) CompleteOAuthSignup(
 	}
 	hash := string(hashBytes)
 
-	// Same email/phone uniqueness rules as plain signup.
 	existing, err := s.repo.GetUserByEmail(ctx, email)
 	emailExists := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -484,25 +452,21 @@ func (s *service) CompleteOAuthSignup(
 	return s.issuePhoneVerification(ctx, user)
 }
 
-// ── Me / Logout ──────────────────────────────────────────────────
+// ── Current user / Logout ────────────────────────────────────────
 
-func (s *service) Me(ctx context.Context, userID uuid.UUID) (*User, error) {
+func (s *service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*User, error) {
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	u := toAPIUser(user)
+	u := userFromRecord(user)
 	return &u, nil
 }
 
 func (s *service) Logout(ctx context.Context, userID uuid.UUID) error {
-	// Refresh-token rotation isn't wired up on the frontend yet; once it is,
-	// revoke all refresh tokens for the user here.
 	_ = userID
 	return nil
 }
-
-// ── JWT issuance ─────────────────────────────────────────────────
 
 func (s *service) issueAccessToken(u sqlc.User) (string, error) {
 	now := time.Now()
@@ -515,8 +479,6 @@ func (s *service) issueAccessToken(u sqlc.User) (string, error) {
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return tok.SignedString([]byte(s.cfg.JWTSecret))
 }
-
-// ── Helpers ──────────────────────────────────────────────────────
 
 func generateNumericCode(length int) (string, error) {
 	const digits = "0123456789"
@@ -531,8 +493,6 @@ func generateNumericCode(length int) (string, error) {
 	return string(out), nil
 }
 
-// maskPhone returns a "•••• ••• 1234" style for a phone number, preserving
-// only the last 4 digits. Non-digits are stripped before masking.
 func maskPhone(phone string) string {
 	digits := make([]byte, 0, len(phone))
 	for i := 0; i < len(phone); i++ {

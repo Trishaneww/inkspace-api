@@ -5,11 +5,9 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/middleware"
 )
 
-// Routes match the frontend contract in inkspace-web/lib/api/auth.ts.
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	g := rg.Group("/auth")
 
-	// Public
 	g.POST("/signup", m.Handler.Register)
 	g.POST("/login", m.Handler.Login)
 	g.POST("/verify-phone", m.Handler.VerifyPhone)
@@ -18,9 +16,8 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	g.POST("/oauth/:provider", m.Handler.OAuthCallback)
 	g.POST("/refresh", m.Handler.Refresh)
 
-	// Bearer-protected
 	authed := g.Group("")
 	authed.Use(middleware.RequireAuth(m.cfg.JWTSecret))
-	authed.GET("/me", m.Handler.Me)
+	authed.GET("/current-user", m.Handler.GetCurrentUser)
 	authed.POST("/logout", m.Handler.Logout)
 }

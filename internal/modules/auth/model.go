@@ -9,14 +9,11 @@ import (
 type Role string
 
 const (
-	RoleArtist      Role = "artist"
-	RoleStudioAdmin Role = "studio_admin"
-	RoleUser        Role = "user"
+	RoleArtist       Role = "artist"
+	RoleStudioAdmin  Role = "studio_admin"
+	RoleUser         Role = "user"
 )
 
-// User is the API-shaped user object returned by every auth response.
-// Field order/naming intentionally mirrors the TypeScript `User` type
-// in inkspace-web/types/index.ts.
 type User struct {
 	ID              string  `json:"id"`
 	Email           string  `json:"email"`
@@ -29,7 +26,7 @@ type User struct {
 	CreatedAt       string  `json:"createdAt"`
 }
 
-func toAPIUser(u sqlc.User) User {
+func userFromRecord(u sqlc.User) User {
 	out := User{
 		ID:    u.ID.String(),
 		Email: u.Email,

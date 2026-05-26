@@ -19,7 +19,6 @@ func NewHandler(svc Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// POST /v1/auth/signup
 func (h *Handler) Register(c *gin.Context) {
 	var in RegisterInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -34,7 +33,6 @@ func (h *Handler) Register(c *gin.Context) {
 	httpx.Created(c, resp)
 }
 
-// POST /v1/auth/login
 func (h *Handler) Login(c *gin.Context) {
 	var in LoginInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -49,7 +47,6 @@ func (h *Handler) Login(c *gin.Context) {
 	httpx.OK(c, resp)
 }
 
-// POST /v1/auth/verify-phone
 func (h *Handler) VerifyPhone(c *gin.Context) {
 	var in VerifyPhoneInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -64,7 +61,6 @@ func (h *Handler) VerifyPhone(c *gin.Context) {
 	httpx.OK(c, resp)
 }
 
-// POST /v1/auth/verify-phone/resend
 func (h *Handler) ResendPhoneCode(c *gin.Context) {
 	var in ResendPhoneInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -78,7 +74,6 @@ func (h *Handler) ResendPhoneCode(c *gin.Context) {
 	httpx.OK(c, gin.H{"ok": true})
 }
 
-// POST /v1/auth/oauth/:provider
 func (h *Handler) OAuthCallback(c *gin.Context) {
 	provider := c.Param("provider")
 	var in OAuthCallbackInput
@@ -86,7 +81,6 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 		httpx.Error(c, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	// Trust the path param over the body to avoid mismatch.
 	in.Provider = provider
 
 	resp, err := h.svc.OAuthCallback(c.Request.Context(), in)
@@ -97,8 +91,6 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 	httpx.OK(c, resp)
 }
 
-// POST /v1/auth/oauth/complete
-// Called after OAuthCallback returned `oauth_complete_profile_required`.
 func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	var in OAuthCompleteInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -113,14 +105,13 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	httpx.Created(c, resp)
 }
 
-// GET /v1/auth/me  (requires bearer token)
-func (h *Handler) Me(c *gin.Context) {
+func (h *Handler) GetCurrentUser(c *gin.Context) {
 	userID, ok := middleware.UserIDFromContext(c)
 	if !ok {
 		httpx.Error(c, http.StatusUnauthorized, "unauthorized", "missing user context")
 		return
 	}
-	user, err := h.svc.Me(c.Request.Context(), userID)
+	user, err := h.svc.GetCurrentUser(c.Request.Context(), userID)
 	if err != nil {
 		writeServiceError(c, err)
 		return
@@ -128,7 +119,6 @@ func (h *Handler) Me(c *gin.Context) {
 	httpx.OK(c, user)
 }
 
-// POST /v1/auth/logout  (requires bearer token)
 func (h *Handler) Logout(c *gin.Context) {
 	userID, ok := middleware.UserIDFromContext(c)
 	if !ok {
@@ -142,12 +132,9 @@ func (h *Handler) Logout(c *gin.Context) {
 	httpx.NoContent(c)
 }
 
-// POST /v1/auth/refresh — placeholder until refresh-token rotation is wired.
 func (h *Handler) Refresh(c *gin.Context) {
 	httpx.NotImplemented(c)
 }
-
-// ── Error → HTTP mapping ─────────────────────────────────────────
 
 func writeServiceError(c *gin.Context, err error) {
 	switch {
