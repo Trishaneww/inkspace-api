@@ -133,13 +133,25 @@ func (h *Handler) Logout(c *gin.Context) {
 }
 
 func (h *Handler) Refresh(c *gin.Context) {
-	httpx.NotImplemented(c)
+	var in RefreshInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		httpx.Error(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	pair, err := h.svc.RefreshSession(c.Request.Context(), in.RefreshToken)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	httpx.OK(c, pair)
 }
 
 func writeServiceError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidCredentials):
 		httpx.Error(c, http.StatusUnauthorized, "invalid_credentials", err.Error())
+	case errors.Is(err, ErrInvalidRefreshToken):
+		httpx.Error(c, http.StatusUnauthorized, "invalid_refresh_token", err.Error())
 	case errors.Is(err, ErrEmailTaken):
 		httpx.Error(c, http.StatusConflict, "email_taken", err.Error())
 	case errors.Is(err, ErrPhoneTaken):

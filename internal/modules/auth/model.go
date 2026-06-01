@@ -84,6 +84,10 @@ type OAuthCallbackInput struct {
 
 // Used by POST /v1/auth/oauth/complete when a first-time OAuth user
 // submits the prefilled signup form with the remaining fields.
+type RefreshInput struct {
+	RefreshToken string `json:"refreshToken" binding:"required"`
+}
+
 type OAuthCompleteInput struct {
 	OAuthSession string `json:"oauthSession" binding:"required"`
 	FirstName    string `json:"firstName"    binding:"required,min=1,max=50"`
@@ -96,9 +100,10 @@ type OAuthCompleteInput struct {
 // ── Response shapes ──────────────────────────────────────────────
 
 type AuthenticatedResponse struct {
-	Status string `json:"status"` // always "authenticated"
-	Token  string `json:"token"`
-	User   User   `json:"user"`
+	Status       string `json:"status"` // always "authenticated"
+	Token        string `json:"token"`
+	RefreshToken string `json:"refreshToken"`
+	User         User   `json:"user"`
 }
 
 type PhoneVerificationRequiredResponse struct {

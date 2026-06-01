@@ -1,3 +1,0 @@
-ALTER INDEX idx_phone_verifications_expires_at RENAME TO idx_phone_challenges_expires_at;
-ALTER INDEX idx_phone_verifications_user_id    RENAME TO idx_phone_challenges_user_id;
-ALTER TABLE phone_verifications RENAME TO phone_verification_challenges;

@@ -12,6 +12,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
 	"github.com/trishaneupnexx/inkspace-api/internal/middleware"
+	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 )
 
 type Server struct {
@@ -21,7 +22,7 @@ type Server struct {
 	engine *gin.Engine
 }
 
-func New(cfg *config.Config, log *slog.Logger, db *pgxpool.Pool, pub *events.Publisher) *Server {
+func New(cfg *config.Config, log *slog.Logger, db *pgxpool.Pool, pub *events.Publisher, s3 *s3client.Client) *Server {
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -37,7 +38,7 @@ func New(cfg *config.Config, log *slog.Logger, db *pgxpool.Pool, pub *events.Pub
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	registerRoutes(engine, cfg, db, pub)
+	registerRoutes(engine, cfg, db, pub, s3)
 
 	return &Server{
 		cfg:    cfg,

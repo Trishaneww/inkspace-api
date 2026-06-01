@@ -4,7 +4,6 @@ import "github.com/trishaneupnexx/inkspace-api/internal/events"
 
 type Service interface {
 	// TODO: GetArtistPortfolio, CreatePortfolioItem, UpdatePortfolioItem, DeletePortfolioItem
-	// TODO: ListFlash (with filters), GetFlash, CreateFlash, UpdateFlash, DeleteFlash, ReserveFlash
 }
 
 type service struct {

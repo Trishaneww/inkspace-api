@@ -31,6 +31,17 @@ type Repository interface {
 	) error
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
+	
+	CreateRefreshToken(
+		ctx context.Context,
+		arg sqlc.CreateRefreshTokenParams,
+	) (sqlc.RefreshToken, error)
+	GetActiveRefreshTokenByHash(
+		ctx context.Context,
+		tokenHash string,
+	) (sqlc.RefreshToken, error)
+	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 }
 
 type repository struct {
@@ -114,4 +125,28 @@ func (r *repository) RevokeActivePhoneVerificationsForUser(
 	ctx context.Context, userID uuid.UUID,
 ) error {
 	return r.q.RevokeActivePhoneVerificationsForUser(ctx, userID)
+}
+
+func (r *repository) CreateRefreshToken(
+	ctx context.Context, arg sqlc.CreateRefreshTokenParams,
+) (sqlc.RefreshToken, error) {
+	return r.q.CreateRefreshToken(ctx, arg)
+}
+
+func (r *repository) GetActiveRefreshTokenByHash(
+	ctx context.Context, tokenHash string,
+) (sqlc.RefreshToken, error) {
+	return r.q.GetActiveRefreshTokenByHash(ctx, tokenHash)
+}
+
+func (r *repository) RevokeRefreshToken(
+	ctx context.Context, tokenHash string,
+) error {
+	return r.q.RevokeRefreshToken(ctx, tokenHash)
+}
+
+func (r *repository) RevokeAllRefreshTokensForUser(
+	ctx context.Context, userID uuid.UUID,
+) error {
+	return r.q.RevokeAllRefreshTokensForUser(ctx, userID)
 }

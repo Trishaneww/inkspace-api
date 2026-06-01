@@ -7,14 +7,8 @@ import (
 )
 
 type Repository interface {
-	// Portfolio items
 	// TODO: CreatePortfolioItem, GetPortfolioItem, ListPortfolioItemsByArtist,
 	// TODO: UpdatePortfolioItem, DeletePortfolioItem
-
-	// Flash designs
-	// TODO: CreateFlashDesign, GetFlashDesign, ListFlashDesigns,
-	// TODO: UpdateFlashDesign, DeleteFlashDesign,
-	// TODO: ReserveFlashDesign, ReleaseFlashReservation, ClaimFlashDesign
 }
 
 type repository struct {
