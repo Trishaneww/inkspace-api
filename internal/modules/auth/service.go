@@ -3,6 +3,9 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -31,6 +34,7 @@ var (
 	ErrTooManyVerificationAttempts = errors.New("too many verification attempts")
 	ErrProviderNotConfigured       = errors.New("oauth provider not configured")
 	ErrProviderNotImplemented      = errors.New("oauth provider integration not implemented")
+	ErrInvalidRefreshToken         = errors.New("invalid or expired refresh token")
 )
 
 type Service interface {
@@ -41,6 +45,7 @@ type Service interface {
 	OAuthCallback(ctx context.Context, in OAuthCallbackInput) (interface{}, error)
 	CompleteOAuthSignup(ctx context.Context, in OAuthCompleteInput) (*PhoneVerificationRequiredResponse, error)
 	GetCurrentUser(ctx context.Context, userID uuid.UUID) (*User, error)
+	RefreshSession(ctx context.Context, refreshToken string) (*TokenPair, error)
 	Logout(ctx context.Context, userID uuid.UUID) error
 }
 
@@ -259,15 +264,16 @@ func (s *service) VerifyPhone(
 		return nil, err
 	}
 
-	token, err := s.issueAccessToken(user)
+	pair, err := s.issueTokenPair(ctx, user)
 	if err != nil {
 		return nil, err
 	}
 
 	return &AuthenticatedResponse{
-		Status: "authenticated",
-		Token:  token,
-		User:   userFromRecord(user),
+		Status:       "authenticated",
+		Token:        pair.AccessToken,
+		RefreshToken: pair.RefreshToken,
+		User:         userFromRecord(user),
 	}, nil
 }
 
@@ -352,14 +358,15 @@ func (s *service) OAuthCallback(
 	switch {
 	case err == nil:
 		// Existing fully-provisioned user — log them in directly.
-		token, err := s.issueAccessToken(user)
+		pair, err := s.issueTokenPair(ctx, user)
 		if err != nil {
 			return nil, err
 		}
 		return &AuthenticatedResponse{
-			Status: "authenticated",
-			Token:  token,
-			User:   userFromRecord(user),
+			Status:       "authenticated",
+			Token:        pair.AccessToken,
+			RefreshToken: pair.RefreshToken,
+			User:         userFromRecord(user),
 		}, nil
 	case errors.Is(err, pgx.ErrNoRows):
 		sessionTok, err := signOAuthSession(s.cfg, claims, in.Provider)
@@ -463,9 +470,36 @@ func (s *service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*User, 
 	return &u, nil
 }
 
+func (s *service) RefreshSession(ctx context.Context, refreshToken string) (*TokenPair, error) {
+	if strings.TrimSpace(refreshToken) == "" {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	hash := hashRefreshToken(refreshToken)
+	existing, err := s.repo.GetActiveRefreshTokenByHash(ctx, hash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrInvalidRefreshToken
+		}
+		return nil, err
+	}
+
+	user, err := s.repo.GetUserByID(ctx, existing.UserID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrInvalidRefreshToken
+		}
+		return nil, err
+	}
+
+	if err := s.repo.RevokeRefreshToken(ctx, hash); err != nil {
+		return nil, err
+	}
+	return s.issueTokenPair(ctx, user)
+}
+
 func (s *service) Logout(ctx context.Context, userID uuid.UUID) error {
-	_ = userID
-	return nil
+	return s.repo.RevokeAllRefreshTokensForUser(ctx, userID)
 }
 
 func (s *service) issueAccessToken(u sqlc.User) (string, error) {
@@ -478,6 +512,42 @@ func (s *service) issueAccessToken(u sqlc.User) (string, error) {
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return tok.SignedString([]byte(s.cfg.JWTSecret))
+}
+
+func (s *service) issueTokenPair(ctx context.Context, u sqlc.User) (*TokenPair, error) {
+	access, err := s.issueAccessToken(u)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := generateRefreshTokenString()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.repo.CreateRefreshToken(ctx, sqlc.CreateRefreshTokenParams{
+		UserID:    u.ID,
+		TokenHash: hashRefreshToken(raw),
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(s.cfg.JWTRefreshTTL), Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenPair{AccessToken: access, RefreshToken: raw}, nil
+}
+
+func generateRefreshTokenString() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func hashRefreshToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
 }
 
 func generateNumericCode(length int) (string, error) {

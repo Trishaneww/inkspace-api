@@ -11,8 +11,12 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
+	"github.com/trishaneupnexx/inkspace-api/internal/maintenance"
+	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 	"github.com/trishaneupnexx/inkspace-api/internal/server"
 )
+
+const cleanupInterval = time.Hour
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -41,7 +45,14 @@ func main() {
 	}
 	defer pub.Close()
 
-	srv := server.New(cfg, log, db, pub)
+	s3, err := s3client.New(ctx, cfg.AWSRegion, cfg.AWSS3Bucket)
+	if err != nil {
+		log.Error("s3_init_failed", "error", err)
+		os.Exit(1)
+	}
+
+	srv := server.New(cfg, log, db, pub, s3)
+	go maintenance.NewCleaner(db, log, cleanupInterval).Run(ctx)
 
 	go func() {
 		if err := srv.Start(); err != nil {

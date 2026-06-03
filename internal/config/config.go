@@ -16,32 +16,30 @@ type Config struct {
 	DatabaseURL string
 	RabbitMQURL string
 
-	// Comma-separated list of origins allowed by the CORS middleware.
 	CORSAllowedOrigins string
 
 	JWTSecret     string
 	JWTAccessTTL  time.Duration
 	JWTRefreshTTL time.Duration
 
-	// Phone verification (OTP) tunables.
 	PhoneCodeTTL     time.Duration
 	PhoneCodeLength  int
 	PhoneMaxAttempts int
 
-	// Vonage SMS — unset means "log to stdout instead of sending".
 	VonageAPIKey    string
 	VonageAPISecret string
 	VonageFromName  string
 
-	// OAuth — public client IDs are also exposed in the frontend; the
-	// secrets stay here. When unset, OAuth endpoints return 501.
 	GoogleClientID        string
 	GoogleClientSecret    string
 	MicrosoftClientID     string
 	MicrosoftClientSecret string
-	// "common" (default) supports both personal and work/school accounts.
-	// Set to a specific tenant ID for single-tenant apps.
 	MicrosoftTenantID string
+
+	AWSRegion          string
+	AWSAccessKeyID     string
+	AWSSecretAccessKey string
+	AWSS3Bucket        string
 }
 
 func Load() (*Config, error) {
@@ -66,6 +64,11 @@ func Load() (*Config, error) {
 		MicrosoftClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
 		MicrosoftClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
 		MicrosoftTenantID:     getEnv("MICROSOFT_TENANT_ID", "common"),
+
+		AWSRegion:          os.Getenv("AWS_REGION"),
+		AWSAccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+		AWSSecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		AWSS3Bucket:        os.Getenv("AWS_S3_BUCKET"),
 	}
 
 	if cfg.DatabaseURL == "" {

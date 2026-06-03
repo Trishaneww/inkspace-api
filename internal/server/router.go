@@ -5,16 +5,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
+	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/artists"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/auth"
+	"github.com/trishaneupnexx/inkspace-api/internal/modules/flashes"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/portfolios"
 )
 
-func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pub *events.Publisher) {
+func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pub *events.Publisher, s3 *s3client.Client) {
 	api := engine.Group("/v1")
 
 	auth.New(cfg, db, pub).RegisterRoutes(api)
 	artists.New(cfg, db, pub).RegisterRoutes(api)
 	portfolios.New(cfg, db, pub).RegisterRoutes(api)
+	flashes.New(cfg, db, pub, s3).RegisterRoutes(api)
 }

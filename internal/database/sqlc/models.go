@@ -33,23 +33,38 @@ type ArtistAvailability struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
-type FlashDesign struct {
-	ID            uuid.UUID          `json:"id"`
-	ArtistID      uuid.UUID          `json:"artist_id"`
-	Title         string             `json:"title"`
-	Description   string             `json:"description"`
-	ImageUrl      string             `json:"image_url"`
-	Styles        []string           `json:"styles"`
-	Placement     *string            `json:"placement"`
-	SizeInches    pgtype.Numeric     `json:"size_inches"`
-	PriceCents    int64              `json:"price_cents"`
-	Currency      string             `json:"currency"`
-	Repeatable    bool               `json:"repeatable"`
-	Status        string             `json:"status"`
-	ReservedBy    pgtype.UUID        `json:"reserved_by"`
-	ReservedUntil pgtype.Timestamptz `json:"reserved_until"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+type Flash struct {
+	ID                  uuid.UUID          `json:"id"`
+	ArtistID            uuid.UUID          `json:"artist_id"`
+	Status              string             `json:"status"`
+	Title               string             `json:"title"`
+	Description         *string            `json:"description"`
+	S3Key               *string            `json:"s3_key"`
+	ReferenceS3Key      *string            `json:"reference_s3_key"`
+	ColorType           string             `json:"color_type"`
+	Styles              []string           `json:"styles"`
+	Placements          []string           `json:"placements"`
+	PricingMode         string             `json:"pricing_mode"`
+	FlatPriceCents      *int64             `json:"flat_price_cents"`
+	FlatDurationMinutes *int32             `json:"flat_duration_minutes"`
+	DepositCents        *int64             `json:"deposit_cents"`
+	Currency            string             `json:"currency"`
+	Repeatable          bool               `json:"repeatable"`
+	ClaimedAt           pgtype.Timestamptz `json:"claimed_at"`
+	ClaimedByBookingID  pgtype.UUID        `json:"claimed_by_booking_id"`
+	ArchivedAt          pgtype.Timestamptz `json:"archived_at"`
+	PublishedAt         pgtype.Timestamptz `json:"published_at"`
+	ViewCount           int64              `json:"view_count"`
+	SaveCount           int64              `json:"save_count"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FlashPricingTier struct {
+	FlashID         uuid.UUID `json:"flash_id"`
+	SizeCode        string    `json:"size_code"`
+	DurationMinutes int32     `json:"duration_minutes"`
+	PriceCents      int64     `json:"price_cents"`
 }
 
 type PhoneVerification struct {
@@ -61,17 +76,6 @@ type PhoneVerification struct {
 	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
 	ConsumedAt pgtype.Timestamptz `json:"consumed_at"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-}
-
-type PortfolioItem struct {
-	ID          uuid.UUID          `json:"id"`
-	ArtistID    uuid.UUID          `json:"artist_id"`
-	ImageUrl    string             `json:"image_url"`
-	Caption     string             `json:"caption"`
-	Styles      []string           `json:"styles"`
-	Placement   *string            `json:"placement"`
-	HealedPhoto bool               `json:"healed_photo"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type RefreshToken struct {
