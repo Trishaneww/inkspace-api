@@ -25,7 +25,7 @@ var (
 
 const (
 	presignUploadTTL = 15 * time.Minute
-	presignViewTTL = 1 * time.Hour
+	presignViewTTL   = 1 * time.Hour
 
 	defaultListLimit = 50
 	maxListLimit     = 100
@@ -113,7 +113,6 @@ func (s *service) Create(ctx context.Context, userID uuid.UUID, input CreateFlas
 		FlatPriceCents:      input.FlatPriceCents,
 		FlatDurationMinutes: input.FlatDurationMinutes,
 		DepositCents:        input.DepositCents,
-		Currency:            input.Currency,
 		Repeatable:          input.Repeatable,
 		PublishedAt:         publishedAt,
 	}
@@ -148,7 +147,7 @@ func (s *service) Create(ctx context.Context, userID uuid.UUID, input CreateFlas
 		return Flash{}, err
 	}
 
-	return s.hydrateFlash(ctx, created, tiers)
+	return s.hydrateFlash(ctx, created, tiers, s.artistCurrency(ctx, artist.ID))
 }
 
 func (s *service) Get(ctx context.Context, flashID uuid.UUID) (Flash, error) {
@@ -175,7 +174,7 @@ func (s *service) Get(ctx context.Context, flashID uuid.UUID) (Flash, error) {
 		}
 	}()
 
-	return s.hydrateFlash(ctx, row, tiers)
+	return s.hydrateFlash(ctx, row, tiers, s.artistCurrency(ctx, row.ArtistID))
 }
 
 func (s *service) ListByArtist(ctx context.Context, artistID uuid.UUID, filter ListFilter) (FlashListResult, error) {
@@ -219,7 +218,6 @@ func (s *service) Update(ctx context.Context, userID, flashID uuid.UUID, input U
 		FlatPriceCents:      input.FlatPriceCents,
 		FlatDurationMinutes: input.FlatDurationMinutes,
 		DepositCents:        input.DepositCents,
-		Currency:            input.Currency,
 		Repeatable:          input.Repeatable,
 	}
 	if input.ColorType != nil {
@@ -285,7 +283,7 @@ func (s *service) Update(ctx context.Context, userID, flashID uuid.UUID, input U
 		}
 	}
 
-	return s.hydrateFlash(ctx, updated, tiers)
+	return s.hydrateFlash(ctx, updated, tiers, s.artistCurrency(ctx, updated.ArtistID))
 }
 
 func (s *service) Publish(ctx context.Context, userID, flashID uuid.UUID) (Flash, error) {
@@ -315,7 +313,7 @@ func (s *service) Publish(ctx context.Context, userID, flashID uuid.UUID) (Flash
 	if err != nil {
 		return Flash{}, err
 	}
-	return s.hydrateFlash(ctx, published, tiers)
+	return s.hydrateFlash(ctx, published, tiers, s.artistCurrency(ctx, published.ArtistID))
 }
 
 func (s *service) Archive(ctx context.Context, userID, flashID uuid.UUID) (Flash, error) {
@@ -341,7 +339,7 @@ func (s *service) Archive(ctx context.Context, userID, flashID uuid.UUID) (Flash
 	if err != nil {
 		return Flash{}, err
 	}
-	return s.hydrateFlash(ctx, archived, tiers)
+	return s.hydrateFlash(ctx, archived, tiers, s.artistCurrency(ctx, archived.ArtistID))
 }
 
 func (s *service) Unarchive(ctx context.Context, userID, flashID uuid.UUID) (Flash, error) {
@@ -367,7 +365,7 @@ func (s *service) Unarchive(ctx context.Context, userID, flashID uuid.UUID) (Fla
 	if err != nil {
 		return Flash{}, err
 	}
-	return s.hydrateFlash(ctx, unarchived, tiers)
+	return s.hydrateFlash(ctx, unarchived, tiers, s.artistCurrency(ctx, unarchived.ArtistID))
 }
 
 func (s *service) Delete(ctx context.Context, userID, flashID uuid.UUID) error {
@@ -443,9 +441,10 @@ func (s *service) listFlashes(ctx context.Context, artistID uuid.UUID, filter Li
 		tiersByFlash[tier.FlashID] = append(tiersByFlash[tier.FlashID], tier)
 	}
 
+	currency := s.artistCurrency(ctx, artistID)
 	items := make([]Flash, 0, len(rows))
 	for _, row := range rows {
-		f, err := s.hydrateFlash(ctx, row, tiersByFlash[row.ID])
+		f, err := s.hydrateFlash(ctx, row, tiersByFlash[row.ID], currency)
 		if err != nil {
 			return FlashListResult{}, err
 		}
@@ -461,15 +460,22 @@ func (s *service) listFlashes(ctx context.Context, artistID uuid.UUID, filter Li
 	}, nil
 }
 
+// requireArtist resolves the caller's artist profile, lazily provisioning it
+// if missing. The flashbook routes already gate the caller to the artist role,
+// so creating the row on demand here is safe (the net for artists whose row
+// wasn't created at activation).
 func (s *service) requireArtist(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error) {
 	artist, err := s.repo.GetArtistByUserID(ctx, userID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return sqlc.Artist{}, ErrArtistMissing
-		}
+	if err == nil {
+		return artist, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
 		return sqlc.Artist{}, err
 	}
-	return artist, nil
+	if err := s.repo.EnsureArtist(ctx, userID); err != nil {
+		return sqlc.Artist{}, err
+	}
+	return s.repo.GetArtistByUserID(ctx, userID)
 }
 
 func (s *service) requireOwnership(ctx context.Context, userID uuid.UUID, row sqlc.Flash) error {
@@ -483,8 +489,19 @@ func (s *service) requireOwnership(ctx context.Context, userID uuid.UUID, row sq
 	return nil
 }
 
-func (s *service) hydrateFlash(ctx context.Context, row sqlc.Flash, tiers []sqlc.FlashPricingTier) (Flash, error) {
+// artistCurrency resolves the currency a flash should be priced in from the
+// artist's settings, falling back to CAD when no settings row exists yet.
+func (s *service) artistCurrency(ctx context.Context, artistID uuid.UUID) string {
+	settings, err := s.repo.GetArtistSettings(ctx, artistID)
+	if err != nil {
+		return "CAD"
+	}
+	return settings.Currency
+}
+
+func (s *service) hydrateFlash(ctx context.Context, row sqlc.Flash, tiers []sqlc.FlashPricingTier, currency string) (Flash, error) {
 	flash := flashFromRow(row, tiers)
+	flash.Currency = currency
 
 	if flash.S3Key != nil && *flash.S3Key != "" {
 		url, err := s.s3.PresignGet(ctx, *flash.S3Key, presignViewTTL)

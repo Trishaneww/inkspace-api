@@ -13,7 +13,6 @@ INSERT INTO flashes (
     flat_price_cents,
     flat_duration_minutes,
     deposit_cents,
-    currency,
     repeatable,
     published_at
 )
@@ -31,7 +30,6 @@ VALUES (
     sqlc.narg('flat_price_cents')::bigint,
     sqlc.narg('flat_duration_minutes')::integer,
     sqlc.narg('deposit_cents')::bigint,
-    @currency,
     @repeatable,
     sqlc.narg('published_at')::timestamptz
 )
@@ -77,7 +75,6 @@ SET title                 = COALESCE(sqlc.narg('title')::text,                  
     flat_price_cents      = COALESCE(sqlc.narg('flat_price_cents')::bigint,             flat_price_cents),
     flat_duration_minutes = COALESCE(sqlc.narg('flat_duration_minutes')::integer,       flat_duration_minutes),
     deposit_cents         = COALESCE(sqlc.narg('deposit_cents')::bigint,                deposit_cents),
-    currency              = COALESCE(sqlc.narg('currency')::char(3),                    currency),
     repeatable            = COALESCE(sqlc.narg('repeatable')::boolean,                  repeatable),
     updated_at            = now()
 WHERE id = @id
