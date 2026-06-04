@@ -9,9 +9,9 @@ import (
 type Role string
 
 const (
-	RoleArtist       Role = "artist"
-	RoleStudioAdmin  Role = "studio_admin"
-	RoleUser         Role = "user"
+	RoleArtist      Role = "artist"
+	RoleStudioAdmin Role = "studio_admin"
+	RoleUser        Role = "user"
 )
 
 type User struct {
@@ -60,6 +60,10 @@ type RegisterInput struct {
 	Phone     string `json:"phone"     binding:"required,min=7,max=20"`
 	Password  string `json:"password"  binding:"required,min=8"`
 	Role      Role   `json:"role"      binding:"required,oneof=artist studio_admin user"`
+	// Username is required for artists (it backs their public booking link) and
+	// optional otherwise; enforced in the service since it's role-dependent.
+	Username     string `json:"username"     binding:"omitempty,min=3,max=30"`
+	InstagramURL string `json:"instagramUrl" binding:"omitempty,url,max=255"`
 }
 
 type LoginInput struct {
@@ -95,6 +99,8 @@ type OAuthCompleteInput struct {
 	Password     string `json:"password"     binding:"required,min=8"`
 	Phone        string `json:"phone"        binding:"required,min=7,max=20"`
 	Role         Role   `json:"role"         binding:"required,oneof=artist studio_admin user"`
+	Username     string `json:"username"     binding:"omitempty,min=3,max=30"`
+	InstagramURL string `json:"instagramUrl" binding:"omitempty,url,max=255"`
 }
 
 // ── Response shapes ──────────────────────────────────────────────

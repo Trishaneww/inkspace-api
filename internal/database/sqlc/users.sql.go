@@ -50,9 +50,9 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, password_hash, role, first_name, last_name, phone)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at
+INSERT INTO users (email, password_hash, role, first_name, last_name, phone, username, instagram_url)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url
 `
 
 type CreateUserParams struct {
@@ -62,6 +62,8 @@ type CreateUserParams struct {
 	FirstName    *string `json:"first_name"`
 	LastName     *string `json:"last_name"`
 	Phone        *string `json:"phone"`
+	Username     *string `json:"username"`
+	InstagramUrl *string `json:"instagram_url"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -72,6 +74,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.FirstName,
 		arg.LastName,
 		arg.Phone,
+		arg.Username,
+		arg.InstagramUrl,
 	)
 	var i User
 	err := row.Scan(
@@ -86,6 +90,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LastName,
 		&i.Phone,
 		&i.PhoneVerifiedAt,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.InstagramUrl,
 	)
 	return i, err
 }
@@ -136,7 +143,7 @@ func (q *Queries) GetActiveRefreshTokenByHash(ctx context.Context, tokenHash str
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at FROM users WHERE email = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -154,12 +161,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.LastName,
 		&i.Phone,
 		&i.PhoneVerifiedAt,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.InstagramUrl,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at FROM users WHERE id = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -177,12 +187,15 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.LastName,
 		&i.Phone,
 		&i.PhoneVerifiedAt,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.InstagramUrl,
 	)
 	return i, err
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at FROM users WHERE phone = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url FROM users WHERE phone = $1
 `
 
 func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, error) {
@@ -200,6 +213,9 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, erro
 		&i.LastName,
 		&i.Phone,
 		&i.PhoneVerifiedAt,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.InstagramUrl,
 	)
 	return i, err
 }
@@ -257,9 +273,11 @@ SET password_hash = $2,
     first_name    = $4,
     last_name     = $5,
     phone         = $6,
+    username      = $7,
+    instagram_url = $8,
     updated_at    = now()
 WHERE id = $1 AND phone_verified_at IS NULL
-RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url
 `
 
 type UpdateUnverifiedUserParams struct {
@@ -269,6 +287,8 @@ type UpdateUnverifiedUserParams struct {
 	FirstName    *string   `json:"first_name"`
 	LastName     *string   `json:"last_name"`
 	Phone        *string   `json:"phone"`
+	Username     *string   `json:"username"`
+	InstagramUrl *string   `json:"instagram_url"`
 }
 
 // Used when an in-progress signup re-submits with corrected data
@@ -282,6 +302,8 @@ func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverified
 		arg.FirstName,
 		arg.LastName,
 		arg.Phone,
+		arg.Username,
+		arg.InstagramUrl,
 	)
 	var i User
 	err := row.Scan(
@@ -296,6 +318,9 @@ func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverified
 		&i.LastName,
 		&i.Phone,
 		&i.PhoneVerifiedAt,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.InstagramUrl,
 	)
 	return i, err
 }

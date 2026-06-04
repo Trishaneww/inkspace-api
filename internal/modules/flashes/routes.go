@@ -3,6 +3,7 @@ package flashes
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/trishaneupnexx/inkspace-api/internal/middleware"
+	"github.com/trishaneupnexx/inkspace-api/internal/modules/auth"
 )
 
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
@@ -10,9 +11,10 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/artists/:id/flashes", m.Handler.ListByArtist)
 	rg.GET("/flashes/:id", m.Handler.Get)
 
-	// Authed — artist manages their own flashbook.
+	// Authed — only artists manage a flashbook.
 	authed := rg.Group("")
 	authed.Use(middleware.RequireAuth(m.cfg.JWTSecret))
+	authed.Use(middleware.RequireRole(string(auth.RoleArtist)))
 
 	authed.GET("/current-user/flashes", m.Handler.ListForCurrentUser)
 	authed.POST("/flashes/uploads/presign", m.Handler.PresignUpload)

@@ -61,6 +61,25 @@ func RequireAuth(secret string) gin.HandlerFunc {
 	}
 }
 
+// RequireRole gates a route to one of the given roles. It must run after
+// RequireAuth (which sets the role claim on the context).
+func RequireRole(roles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, ok := RoleFromContext(c)
+		if !ok {
+			httpx.Error(c, 403, "forbidden", "role not available")
+			return
+		}
+		for _, allowed := range roles {
+			if role == allowed {
+				c.Next()
+				return
+			}
+		}
+		httpx.Error(c, 403, "forbidden", "insufficient permissions for this resource")
+	}
+}
+
 // UserIDFromContext pulls the verified user id set by RequireAuth.
 func UserIDFromContext(c *gin.Context) (uuid.UUID, bool) {
 	v, exists := c.Get(CtxUserIDKey)

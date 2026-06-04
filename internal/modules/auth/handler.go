@@ -156,6 +156,10 @@ func writeServiceError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusConflict, "email_taken", err.Error())
 	case errors.Is(err, ErrPhoneTaken):
 		httpx.Error(c, http.StatusConflict, "phone_taken", err.Error())
+	case errors.Is(err, ErrUsernameTaken):
+		httpx.Error(c, http.StatusConflict, "username_taken", err.Error())
+	case errors.Is(err, ErrUsernameRequired):
+		httpx.Error(c, http.StatusBadRequest, "username_required", err.Error())
 	case errors.Is(err, ErrPhoneVerificationNotFound):
 		httpx.Error(c, http.StatusNotFound, "phone_verification_not_found", err.Error())
 	case errors.Is(err, ErrInvalidVerificationCode):

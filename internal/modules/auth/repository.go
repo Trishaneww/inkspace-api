@@ -14,7 +14,11 @@ type Repository interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error)
 	GetUserByEmail(ctx context.Context, email string) (sqlc.User, error)
 	GetUserByPhone(ctx context.Context, phone *string) (sqlc.User, error)
+	GetUserByUsername(ctx context.Context, username *string) (sqlc.User, error)
 	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
+
+	// EnsureArtist provisions the artist profile row for a user (idempotent).
+	EnsureArtist(ctx context.Context, userID uuid.UUID) error
 
 	CreatePhoneVerification(
 		ctx context.Context,
@@ -31,7 +35,7 @@ type Repository interface {
 	) error
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
-	
+
 	CreateRefreshToken(
 		ctx context.Context,
 		arg sqlc.CreateRefreshTokenParams,
@@ -83,10 +87,22 @@ func (r *repository) GetUserByPhone(
 	return r.q.GetUserByPhone(ctx, phone)
 }
 
+func (r *repository) GetUserByUsername(
+	ctx context.Context, username *string,
+) (sqlc.User, error) {
+	return r.q.GetUserByUsername(ctx, username)
+}
+
 func (r *repository) MarkPhoneVerified(
 	ctx context.Context, id uuid.UUID,
 ) error {
 	return r.q.MarkPhoneVerified(ctx, id)
+}
+
+func (r *repository) EnsureArtist(
+	ctx context.Context, userID uuid.UUID,
+) error {
+	return r.q.EnsureArtist(ctx, userID)
 }
 
 func (r *repository) CreatePhoneVerification(

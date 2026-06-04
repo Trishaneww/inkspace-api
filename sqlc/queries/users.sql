@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO users (email, password_hash, role, first_name, last_name, phone)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO users (email, password_hash, role, first_name, last_name, phone, username, instagram_url)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: GetUserByID :one
@@ -28,6 +28,8 @@ SET password_hash = $2,
     first_name    = $4,
     last_name     = $5,
     phone         = $6,
+    username      = $7,
+    instagram_url = $8,
     updated_at    = now()
 WHERE id = $1 AND phone_verified_at IS NULL
 RETURNING *;

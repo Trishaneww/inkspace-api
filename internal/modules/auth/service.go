@@ -35,6 +35,8 @@ var (
 	ErrProviderNotConfigured       = errors.New("oauth provider not configured")
 	ErrProviderNotImplemented      = errors.New("oauth provider integration not implemented")
 	ErrInvalidRefreshToken         = errors.New("invalid or expired refresh token")
+	ErrUsernameRequired            = errors.New("a username is required for artist accounts")
+	ErrUsernameTaken               = errors.New("username already in use")
 )
 
 type Service interface {
@@ -59,7 +61,6 @@ func NewService(cfg *config.Config, repo Repository, pub *events.Publisher) Serv
 	return &service{cfg: cfg, repo: repo, events: pub}
 }
 
-
 func (s *service) Register(
 	ctx context.Context, in RegisterInput,
 ) (*PhoneVerificationRequiredResponse, error) {
@@ -74,6 +75,7 @@ func (s *service) Register(
 	firstName := strings.TrimSpace(in.FirstName)
 	lastName := strings.TrimSpace(in.LastName)
 	phone := strings.TrimSpace(in.Phone)
+	instagram := optionalString(in.InstagramURL)
 
 	// Look up any existing row by email. An in-progress (unverified)
 	// signup is allowed to re-submit to correct typos; a verified user
@@ -85,6 +87,15 @@ func (s *service) Register(
 	}
 	if emailExists && existing.PhoneVerifiedAt.Valid {
 		return nil, ErrEmailTaken
+	}
+
+	var selfID uuid.UUID
+	if emailExists {
+		selfID = existing.ID
+	}
+	username, err := s.resolveUsername(ctx, in.Username, in.Role, selfID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Reject phone reuse by ANY user other than the in-progress signup
@@ -111,6 +122,8 @@ func (s *service) Register(
 				FirstName:    &firstName,
 				LastName:     &lastName,
 				Phone:        &phone,
+				Username:     username,
+				InstagramUrl: instagram,
 			},
 		)
 		if err != nil {
@@ -126,12 +139,53 @@ func (s *service) Register(
 		FirstName:    &firstName,
 		LastName:     &lastName,
 		Phone:        &phone,
+		Username:     username,
+		InstagramUrl: instagram,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return s.issuePhoneVerification(ctx, user)
+}
+
+// resolveUsername normalizes the requested username and enforces the rules:
+// required for artists, optional otherwise, and globally unique (ignoring the
+// in-progress signup itself, identified by selfID). Returns the value to store
+// (nil when blank for a non-artist).
+func (s *service) resolveUsername(
+	ctx context.Context, raw string, role Role, selfID uuid.UUID,
+) (*string, error) {
+	username := strings.TrimSpace(raw)
+	if username == "" {
+		if role == RoleArtist {
+			return nil, ErrUsernameRequired
+		}
+		return nil, nil
+	}
+
+	owner, err := s.repo.GetUserByUsername(ctx, &username)
+	switch {
+	case err == nil:
+		if owner.ID != selfID {
+			return nil, ErrUsernameTaken
+		}
+	case errors.Is(err, pgx.ErrNoRows):
+		// username is free
+	default:
+		return nil, err
+	}
+	return &username, nil
+}
+
+// optionalString trims input and returns nil for an empty value, so blank
+// optional fields are stored as SQL NULL rather than "".
+func optionalString(raw string) *string {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 // ── Login ────────────────────────────────────────────────────────
@@ -262,6 +316,14 @@ func (s *service) VerifyPhone(
 	user, err := s.repo.GetUserByID(ctx, verification.UserID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Provision the artist profile now that the account is active. Idempotent,
+	// and mirrored by a lazy ensure on the artist endpoints as a safety net.
+	if Role(user.Role) == RoleArtist {
+		if err := s.repo.EnsureArtist(ctx, user.ID); err != nil {
+			return nil, err
+		}
 	}
 
 	pair, err := s.issueTokenPair(ctx, user)
@@ -397,7 +459,8 @@ func (s *service) CompleteOAuthSignup(
 	phone := strings.TrimSpace(in.Phone)
 	firstName := strings.TrimSpace(in.FirstName)
 	lastName := strings.TrimSpace(in.LastName)
-	_ = claims 
+	instagram := optionalString(in.InstagramURL)
+	_ = claims
 
 	hashBytes, err := bcrypt.GenerateFromPassword(
 		[]byte(in.Password), bcrypt.DefaultCost,
@@ -414,6 +477,15 @@ func (s *service) CompleteOAuthSignup(
 	}
 	if emailExists && existing.PhoneVerifiedAt.Valid {
 		return nil, ErrEmailTaken
+	}
+
+	var selfID uuid.UUID
+	if emailExists {
+		selfID = existing.ID
+	}
+	username, err := s.resolveUsername(ctx, in.Username, in.Role, selfID)
+	if err != nil {
+		return nil, err
 	}
 
 	phoneOwner, err := s.repo.GetUserByPhone(ctx, &phone)
@@ -437,6 +509,8 @@ func (s *service) CompleteOAuthSignup(
 				FirstName:    &firstName,
 				LastName:     &lastName,
 				Phone:        &phone,
+				Username:     username,
+				InstagramUrl: instagram,
 			},
 		)
 		if err != nil {
@@ -452,6 +526,8 @@ func (s *service) CompleteOAuthSignup(
 		FirstName:    &firstName,
 		LastName:     &lastName,
 		Phone:        &phone,
+		Username:     username,
+		InstagramUrl: instagram,
 	})
 	if err != nil {
 		return nil, err
