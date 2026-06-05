@@ -38,4 +38,5 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 
 	artist.POST("/settings/stripe/connect", m.Handler.ConnectStripe)
 	artist.POST("/settings/google-calendar/connect", m.Handler.ConnectGoogleCalendar)
+	artist.DELETE("/settings/google-calendar", m.Handler.DisconnectGoogleCalendar)
 }

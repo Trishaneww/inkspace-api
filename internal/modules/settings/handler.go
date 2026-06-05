@@ -286,7 +286,34 @@ func (h *Handler) ConnectStripe(c *gin.Context) {
 }
 
 func (h *Handler) ConnectGoogleCalendar(c *gin.Context) {
-	httpx.NotImplemented(c)
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	var input ConnectGoogleCalendarInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, 400, "invalid_request", err.Error())
+		return
+	}
+	settings, err := h.svc.ConnectGoogleCalendar(c.Request.Context(), userID, input)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, settings)
+}
+
+func (h *Handler) DisconnectGoogleCalendar(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	settings, err := h.svc.DisconnectGoogleCalendar(c.Request.Context(), userID)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, settings)
 }
 
 func requireUserID(c *gin.Context) (uuid.UUID, bool) {
@@ -323,6 +350,10 @@ func respondServiceError(c *gin.Context, err error) {
 		httpx.Error(c, 409, "phone_taken", err.Error())
 	case errors.Is(err, ErrInvalidInput):
 		httpx.Error(c, 400, "invalid_input", err.Error())
+	case errors.Is(err, ErrOAuthExchange):
+		httpx.Error(c, 400, "oauth_exchange_failed", err.Error())
+	case errors.Is(err, ErrIntegrationConfig):
+		httpx.Error(c, 501, "integration_not_configured", err.Error())
 	default:
 		httpx.Error(c, 500, "internal_error", err.Error())
 	}

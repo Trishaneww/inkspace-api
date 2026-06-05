@@ -190,3 +190,8 @@ type CreateBlocklistInput struct {
 	Phone *string `json:"phone"`
 	Note  string  `json:"note"`
 }
+
+type ConnectGoogleCalendarInput struct {
+	Code        string `json:"code"        binding:"required"`
+	RedirectURI string `json:"redirectUri" binding:"required"`
+}

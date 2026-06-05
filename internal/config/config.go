@@ -34,7 +34,8 @@ type Config struct {
 	GoogleClientSecret    string
 	MicrosoftClientID     string
 	MicrosoftClientSecret string
-	MicrosoftTenantID string
+	MicrosoftTenantID     string
+	OAuthTokenEncryptionKey string
 
 	AWSRegion          string
 	AWSAccessKeyID     string
@@ -64,6 +65,8 @@ func Load() (*Config, error) {
 		MicrosoftClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
 		MicrosoftClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
 		MicrosoftTenantID:     getEnv("MICROSOFT_TENANT_ID", "common"),
+
+		OAuthTokenEncryptionKey: os.Getenv("OAUTH_TOKEN_ENCRYPTION_KEY"),
 
 		AWSRegion:          os.Getenv("AWS_REGION"),
 		AWSAccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),

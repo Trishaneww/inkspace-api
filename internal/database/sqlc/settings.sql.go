@@ -60,6 +60,56 @@ func (q *Queries) AddDayOff(ctx context.Context, arg AddDayOffParams) error {
 	return err
 }
 
+const clearGoogleCalendarConnection = `-- name: ClearGoogleCalendarConnection :one
+UPDATE artist_settings
+SET google_calendar_email         = NULL,
+    google_calendar_access_token  = NULL,
+    google_calendar_refresh_token = NULL,
+    google_calendar_token_expiry  = NULL,
+    updated_at                    = now()
+WHERE artist_id = $1
+RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry
+`
+
+func (q *Queries) ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error) {
+	row := q.db.QueryRow(ctx, clearGoogleCalendarConnection, artistID)
+	var i ArtistSetting
+	err := row.Scan(
+		&i.ArtistID,
+		&i.StudioName,
+		&i.StudioAddress,
+		&i.StudioCity,
+		&i.StudioProvince,
+		&i.StudioPostalCode,
+		&i.StudioCountry,
+		&i.StripeAccountID,
+		&i.PayoutFrequency,
+		&i.Currency,
+		&i.DepositFlatFeeCents,
+		&i.PlatformFeePayer,
+		&i.AcceptingBookings,
+		&i.Timezone,
+		&i.GoogleCalendarEmail,
+		&i.SlotIntervalMinutes,
+		&i.BufferMinutes,
+		&i.MinNoticeMinutes,
+		&i.MaxAdvanceDays,
+		&i.TermsText,
+		&i.TermsShowOnBooking,
+		&i.TermsShowAtDeposit,
+		&i.WaiverFileUrl,
+		&i.WaiverRequired,
+		&i.NotifyByEmail,
+		&i.NotifyBySms,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GoogleCalendarAccessToken,
+		&i.GoogleCalendarRefreshToken,
+		&i.GoogleCalendarTokenExpiry,
+	)
+	return i, err
+}
+
 const createSessionPreset = `-- name: CreateSessionPreset :one
 INSERT INTO artist_session_presets (artist_id, name, description, approx_duration_minutes, position)
 VALUES ($1, $2, $3, $4, $5)
@@ -126,14 +176,13 @@ VALUES ($1)
 ON CONFLICT (artist_id) DO NOTHING
 `
 
-
 func (q *Queries) EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, ensureArtistSettings, artistID)
 	return err
 }
 
 const getArtistSettings = `-- name: GetArtistSettings :one
-SELECT artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at FROM artist_settings WHERE artist_id = $1
+SELECT artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry FROM artist_settings WHERE artist_id = $1
 `
 
 func (q *Queries) GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error) {
@@ -168,6 +217,9 @@ func (q *Queries) GetArtistSettings(ctx context.Context, artistID uuid.UUID) (Ar
 		&i.NotifyBySms,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GoogleCalendarAccessToken,
+		&i.GoogleCalendarRefreshToken,
+		&i.GoogleCalendarTokenExpiry,
 	)
 	return i, err
 }
@@ -393,6 +445,70 @@ func (q *Queries) RemoveDayOff(ctx context.Context, arg RemoveDayOffParams) erro
 	return err
 }
 
+const setGoogleCalendarConnection = `-- name: SetGoogleCalendarConnection :one
+UPDATE artist_settings
+SET google_calendar_email         = $1::text,
+    google_calendar_access_token  = $2::text,
+    google_calendar_refresh_token = COALESCE($3::text, google_calendar_refresh_token),
+    google_calendar_token_expiry  = $4::timestamptz,
+    updated_at                    = now()
+WHERE artist_id = $5
+RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry
+`
+
+type SetGoogleCalendarConnectionParams struct {
+	GoogleCalendarEmail string             `json:"google_calendar_email"`
+	AccessToken         string             `json:"access_token"`
+	RefreshToken        *string            `json:"refresh_token"`
+	TokenExpiry         pgtype.Timestamptz `json:"token_expiry"`
+	ArtistID            uuid.UUID          `json:"artist_id"`
+}
+
+func (q *Queries) SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error) {
+	row := q.db.QueryRow(ctx, setGoogleCalendarConnection,
+		arg.GoogleCalendarEmail,
+		arg.AccessToken,
+		arg.RefreshToken,
+		arg.TokenExpiry,
+		arg.ArtistID,
+	)
+	var i ArtistSetting
+	err := row.Scan(
+		&i.ArtistID,
+		&i.StudioName,
+		&i.StudioAddress,
+		&i.StudioCity,
+		&i.StudioProvince,
+		&i.StudioPostalCode,
+		&i.StudioCountry,
+		&i.StripeAccountID,
+		&i.PayoutFrequency,
+		&i.Currency,
+		&i.DepositFlatFeeCents,
+		&i.PlatformFeePayer,
+		&i.AcceptingBookings,
+		&i.Timezone,
+		&i.GoogleCalendarEmail,
+		&i.SlotIntervalMinutes,
+		&i.BufferMinutes,
+		&i.MinNoticeMinutes,
+		&i.MaxAdvanceDays,
+		&i.TermsText,
+		&i.TermsShowOnBooking,
+		&i.TermsShowAtDeposit,
+		&i.WaiverFileUrl,
+		&i.WaiverRequired,
+		&i.NotifyByEmail,
+		&i.NotifyBySms,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GoogleCalendarAccessToken,
+		&i.GoogleCalendarRefreshToken,
+		&i.GoogleCalendarTokenExpiry,
+	)
+	return i, err
+}
+
 const updateArtistSettings = `-- name: UpdateArtistSettings :one
 UPDATE artist_settings
 SET studio_name            = COALESCE($1::text,            studio_name),
@@ -439,7 +555,7 @@ SET studio_name            = COALESCE($1::text,            studio_name),
                              END,
     updated_at             = now()
 WHERE artist_id = $31
-RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at
+RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry
 `
 
 type UpdateArtistSettingsParams struct {
@@ -540,6 +656,9 @@ func (q *Queries) UpdateArtistSettings(ctx context.Context, arg UpdateArtistSett
 		&i.NotifyBySms,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GoogleCalendarAccessToken,
+		&i.GoogleCalendarRefreshToken,
+		&i.GoogleCalendarTokenExpiry,
 	)
 	return i, err
 }

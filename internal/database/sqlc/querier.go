@@ -15,6 +15,7 @@ type Querier interface {
 	AddDayOff(ctx context.Context, arg AddDayOffParams) error
 	ArchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	ClaimFlash(ctx context.Context, arg ClaimFlashParams) (Flash, error)
+	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
 	CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash, error)
@@ -60,6 +61,7 @@ type Querier interface {
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)

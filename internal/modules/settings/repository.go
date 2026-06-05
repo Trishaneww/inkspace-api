@@ -28,6 +28,10 @@ type Repository interface {
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
 	UpdateArtistSettings(ctx context.Context, params sqlc.UpdateArtistSettingsParams) (sqlc.ArtistSetting, error)
 
+	// Google Calendar connection (OAuth tokens stored encrypted)
+	SetGoogleCalendarConnection(ctx context.Context, params sqlc.SetGoogleCalendarConnectionParams) (sqlc.ArtistSetting, error)
+	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
+
 	// Availability windows
 	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistAvailabilityWindow, error)
 	DeleteAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error
@@ -109,6 +113,14 @@ func (r *repository) GetArtistSettings(ctx context.Context, artistID uuid.UUID) 
 
 func (r *repository) UpdateArtistSettings(ctx context.Context, params sqlc.UpdateArtistSettingsParams) (sqlc.ArtistSetting, error) {
 	return r.q.UpdateArtistSettings(ctx, params)
+}
+
+func (r *repository) SetGoogleCalendarConnection(ctx context.Context, params sqlc.SetGoogleCalendarConnectionParams) (sqlc.ArtistSetting, error) {
+	return r.q.SetGoogleCalendarConnection(ctx, params)
+}
+
+func (r *repository) ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error) {
+	return r.q.ClearGoogleCalendarConnection(ctx, artistID)
 }
 
 func (r *repository) ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistAvailabilityWindow, error) {

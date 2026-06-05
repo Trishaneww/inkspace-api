@@ -85,6 +85,24 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
 WHERE artist_id = @artist_id
 RETURNING *;
 
+UPDATE artist_settings
+SET google_calendar_email         = @google_calendar_email::text,
+    google_calendar_access_token  = @access_token::text,
+    google_calendar_refresh_token = COALESCE(sqlc.narg('refresh_token')::text, google_calendar_refresh_token),
+    google_calendar_token_expiry  = @token_expiry::timestamptz,
+    updated_at                    = now()
+WHERE artist_id = @artist_id
+RETURNING *;
+
+UPDATE artist_settings
+SET google_calendar_email         = NULL,
+    google_calendar_access_token  = NULL,
+    google_calendar_refresh_token = NULL,
+    google_calendar_token_expiry  = NULL,
+    updated_at                    = now()
+WHERE artist_id = @artist_id
+RETURNING *;
+
 -- ════════════════════════════════════════════════════════════════════════
 -- Weekly availability windows (replace-all semantics)
 -- ════════════════════════════════════════════════════════════════════════

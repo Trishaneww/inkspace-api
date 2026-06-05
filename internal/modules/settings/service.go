@@ -14,19 +14,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/config"
+	"github.com/trishaneupnexx/inkspace-api/internal/crypto"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 )
 
 var (
-	ErrNotFound       = errors.New("not found")
-	ErrForbidden      = errors.New("not allowed")
-	ErrInvalidInput   = errors.New("invalid input")
-	ErrArtistMissing  = errors.New("user has no artist profile")
-	ErrEmailTaken     = errors.New("email already in use")
-	ErrUsernameTaken  = errors.New("username already in use")
-	ErrPhoneTaken     = errors.New("phone number already in use")
-	ErrNotImplemented = errors.New("not implemented")
+	ErrNotFound          = errors.New("not found")
+	ErrForbidden         = errors.New("not allowed")
+	ErrInvalidInput      = errors.New("invalid input")
+	ErrArtistMissing     = errors.New("user has no artist profile")
+	ErrEmailTaken        = errors.New("email already in use")
+	ErrUsernameTaken     = errors.New("username already in use")
+	ErrPhoneTaken        = errors.New("phone number already in use")
+	ErrNotImplemented    = errors.New("not implemented")
+	ErrIntegrationConfig = errors.New("integration not configured on this server")
+	ErrOAuthExchange     = errors.New("could not complete the connection with the provider")
 )
 
 const (
@@ -63,6 +67,10 @@ type Service interface {
 	SetAvailability(ctx context.Context, userID uuid.UUID, input SetAvailabilityInput) ([]AvailabilityWindow, error)
 	PresignWaiverUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error)
 
+	// Integrations
+	ConnectGoogleCalendar(ctx context.Context, userID uuid.UUID, input ConnectGoogleCalendarInput) (ArtistSettings, error)
+	DisconnectGoogleCalendar(ctx context.Context, userID uuid.UUID) (ArtistSettings, error)
+
 	CreatePreset(ctx context.Context, userID uuid.UUID, input CreatePresetInput) (SessionPreset, error)
 	UpdatePreset(ctx context.Context, userID, presetID uuid.UUID, input UpdatePresetInput) (SessionPreset, error)
 	DeletePreset(ctx context.Context, userID, presetID uuid.UUID) error
@@ -75,13 +83,15 @@ type Service interface {
 }
 
 type service struct {
-	repo Repository
-	s3   *s3client.Client
-	log  *slog.Logger
+	cfg    *config.Config
+	repo   Repository
+	s3     *s3client.Client
+	cipher *crypto.Cipher
+	log    *slog.Logger
 }
 
-func NewService(repo Repository, s3 *s3client.Client) Service {
-	return &service{repo: repo, s3: s3, log: slog.Default()}
+func NewService(cfg *config.Config, repo Repository, s3 *s3client.Client, cipher *crypto.Cipher) Service {
+	return &service{cfg: cfg, repo: repo, s3: s3, cipher: cipher, log: slog.Default()}
 }
 
 func (s *service) GetSettings(ctx context.Context, userID uuid.UUID) (SettingsResponse, error) {
