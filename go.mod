@@ -12,6 +12,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/joho/godotenv v1.5.1
 	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/stripe/stripe-go/v82 v82.5.1
 	golang.org/x/crypto v0.52.0
 )
 

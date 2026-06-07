@@ -28,6 +28,12 @@ type Repository interface {
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
 	UpdateArtistSettings(ctx context.Context, params sqlc.UpdateArtistSettingsParams) (sqlc.ArtistSetting, error)
 
+	// Stripe Connect account linkage + onboarding status
+	SetStripeAccount(ctx context.Context, params sqlc.SetStripeAccountParams) (sqlc.ArtistSetting, error)
+	UpdateStripeAccountStatus(ctx context.Context, params sqlc.UpdateStripeAccountStatusParams) (sqlc.ArtistSetting, error)
+	ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
+	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (sqlc.ArtistSetting, error)
+
 	// Google Calendar connection (OAuth tokens stored encrypted)
 	SetGoogleCalendarConnection(ctx context.Context, params sqlc.SetGoogleCalendarConnectionParams) (sqlc.ArtistSetting, error)
 	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
@@ -113,6 +119,22 @@ func (r *repository) GetArtistSettings(ctx context.Context, artistID uuid.UUID) 
 
 func (r *repository) UpdateArtistSettings(ctx context.Context, params sqlc.UpdateArtistSettingsParams) (sqlc.ArtistSetting, error) {
 	return r.q.UpdateArtistSettings(ctx, params)
+}
+
+func (r *repository) SetStripeAccount(ctx context.Context, params sqlc.SetStripeAccountParams) (sqlc.ArtistSetting, error) {
+	return r.q.SetStripeAccount(ctx, params)
+}
+
+func (r *repository) UpdateStripeAccountStatus(ctx context.Context, params sqlc.UpdateStripeAccountStatusParams) (sqlc.ArtistSetting, error) {
+	return r.q.UpdateStripeAccountStatus(ctx, params)
+}
+
+func (r *repository) ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error) {
+	return r.q.ClearStripeAccount(ctx, artistID)
+}
+
+func (r *repository) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (sqlc.ArtistSetting, error) {
+	return r.q.GetArtistSettingsByStripeAccount(ctx, stripeAccountID)
 }
 
 func (r *repository) SetGoogleCalendarConnection(ctx context.Context, params sqlc.SetGoogleCalendarConnectionParams) (sqlc.ArtistSetting, error) {

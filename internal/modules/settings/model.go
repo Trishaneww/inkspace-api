@@ -3,12 +3,13 @@ package settings
 import "time"
 
 // ── Enums ────────────────────────────────────────────────────────────────
+// PayoutFrequency mirrors Stripe's supported automatic-payout intervals.
+// Stripe has no native biweekly interval, so only weekly/monthly are offered.
 type PayoutFrequency string
 
 const (
-	PayoutWeekly   PayoutFrequency = "weekly"
-	PayoutBiweekly PayoutFrequency = "biweekly"
-	PayoutMonthly  PayoutFrequency = "monthly"
+	PayoutWeekly  PayoutFrequency = "weekly"
+	PayoutMonthly PayoutFrequency = "monthly"
 )
 
 type PlatformFeePayer string
@@ -17,6 +18,16 @@ const (
 	FeePayerArtist PlatformFeePayer = "artist"
 	FeePayerClient PlatformFeePayer = "client"
 	FeePayerSplit  PlatformFeePayer = "split"
+)
+
+// DepositRefundPolicy governs whether a client is eligible for a deposit refund.
+// The chosen policy is snapshotted onto each payment request at pay time.
+type DepositRefundPolicy string
+
+const (
+	RefundNonRefundable DepositRefundPolicy = "non_refundable"
+	RefundWithinWindow  DepositRefundPolicy = "refundable_within_window"
+	RefundAlways        DepositRefundPolicy = "always_refundable"
 )
 
 // ── Response shapes ──────────────────────────────────────────────────────
@@ -39,12 +50,19 @@ type ArtistSettings struct {
 	StudioPostalCode string `json:"studioPostalCode"`
 	StudioCountry    string `json:"studioCountry"`
 
-	StripeConnected bool   `json:"stripeConnected"`
-	PayoutFrequency string `json:"payoutFrequency"`
-	Currency        string `json:"currency"`
+	// StripeConnected = an account exists. ChargesEnabled is the real gate for
+	// "can accept deposits"; an account can exist but be mid-onboarding.
+	StripeConnected        bool   `json:"stripeConnected"`
+	StripeChargesEnabled   bool   `json:"stripeChargesEnabled"`
+	StripePayoutsEnabled   bool   `json:"stripePayoutsEnabled"`
+	StripeDetailsSubmitted bool   `json:"stripeDetailsSubmitted"`
+	PayoutFrequency        string `json:"payoutFrequency"`
+	Currency               string `json:"currency"`
 
-	DepositFlatFeeCents *int64 `json:"depositFlatFeeCents"`
-	PlatformFeePayer    string `json:"platformFeePayer"`
+	DepositFlatFeeCents     *int64 `json:"depositFlatFeeCents"`
+	PlatformFeePayer        string `json:"platformFeePayer"`
+	DepositRefundPolicy     string `json:"depositRefundPolicy"`
+	CancellationNoticeHours *int32 `json:"cancellationNoticeHours"`
 
 	AcceptingBookings       bool   `json:"acceptingBookings"`
 	Timezone                string `json:"timezone"`
@@ -135,6 +153,7 @@ type UpdateSettingsInput struct {
 	PayoutFrequency     *string `json:"payoutFrequency"`
 	Currency            *string `json:"currency"`
 	PlatformFeePayer    *string `json:"platformFeePayer"`
+	DepositRefundPolicy *string `json:"depositRefundPolicy"`
 	AcceptingBookings   *bool   `json:"acceptingBookings"`
 	Timezone            *string `json:"timezone"`
 	SlotIntervalMinutes *int32  `json:"slotIntervalMinutes"`
@@ -149,12 +168,22 @@ type UpdateSettingsInput struct {
 
 	// Nullable fields: send the value to set it, or set the paired clear flag
 	// to unset it.
-	DepositFlatFeeCents *int64 `json:"depositFlatFeeCents"`
-	ClearDepositFlatFee bool   `json:"clearDepositFlatFee"`
-	MaxAdvanceDays      *int32 `json:"maxAdvanceDays"`
-	ClearMaxAdvance     bool   `json:"clearMaxAdvance"`
+	DepositFlatFeeCents *int64  `json:"depositFlatFeeCents"`
+	ClearDepositFlatFee bool    `json:"clearDepositFlatFee"`
+	MaxAdvanceDays      *int32  `json:"maxAdvanceDays"`
+	ClearMaxAdvance     bool    `json:"clearMaxAdvance"`
 	WaiverFileURL       *string `json:"waiverFileUrl"`
 	ClearWaiverFile     bool    `json:"clearWaiverFile"`
+
+	CancellationNoticeHours *int32 `json:"cancellationNoticeHours"`
+	ClearCancellationNotice bool   `json:"clearCancellationNotice"`
+}
+
+// StripeConnectResponse carries the Stripe-hosted onboarding URL the frontend
+// redirects the artist to. Same shape whether the account is newly created or
+// the artist is resuming/re-opening onboarding.
+type StripeConnectResponse struct {
+	URL string `json:"url"`
 }
 
 type AvailabilityWindowInput struct {

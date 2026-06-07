@@ -2,6 +2,7 @@ package settings
 
 import (
 	"errors"
+	"io"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -282,7 +283,59 @@ func (h *Handler) RemoveBlocklistEntry(c *gin.Context) {
 }
 
 func (h *Handler) ConnectStripe(c *gin.Context) {
-	httpx.NotImplemented(c)
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.ConnectStripe(c.Request.Context(), userID)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, resp)
+}
+
+func (h *Handler) RefreshStripeStatus(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	settings, err := h.svc.RefreshStripeStatus(c.Request.Context(), userID)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, settings)
+}
+
+func (h *Handler) DisconnectStripe(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	settings, err := h.svc.DisconnectStripe(c.Request.Context(), userID)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, settings)
+}
+
+// StripeWebhook is a public endpoint (no JWT) — authenticity is established by
+// the Stripe-Signature header, verified in the service against the webhook
+// secret. We read the raw body since signature verification needs the exact
+// bytes Stripe signed.
+func (h *Handler) StripeWebhook(c *gin.Context) {
+	payload, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		httpx.Error(c, 400, "invalid_request", "could not read request body")
+		return
+	}
+	if err := h.svc.HandleStripeWebhook(c.Request.Context(), payload, c.GetHeader("Stripe-Signature")); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, gin.H{"received": true})
 }
 
 func (h *Handler) ConnectGoogleCalendar(c *gin.Context) {
@@ -352,6 +405,8 @@ func respondServiceError(c *gin.Context, err error) {
 		httpx.Error(c, 400, "invalid_input", err.Error())
 	case errors.Is(err, ErrOAuthExchange):
 		httpx.Error(c, 400, "oauth_exchange_failed", err.Error())
+	case errors.Is(err, ErrStripeAPI):
+		httpx.Error(c, 502, "stripe_error", err.Error())
 	case errors.Is(err, ErrIntegrationConfig):
 		httpx.Error(c, 501, "integration_not_configured", err.Error())
 	default:

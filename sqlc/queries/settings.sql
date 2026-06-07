@@ -59,6 +59,7 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
     waiver_required        = COALESCE(sqlc.narg('waiver_required')::boolean,     waiver_required),
     notify_by_email        = COALESCE(sqlc.narg('notify_by_email')::boolean,     notify_by_email),
     notify_by_sms          = COALESCE(sqlc.narg('notify_by_sms')::boolean,       notify_by_sms),
+    deposit_refund_policy  = COALESCE(sqlc.narg('deposit_refund_policy')::text,  deposit_refund_policy),
 
     -- Nullable fields support explicit clearing via a paired boolean.
     deposit_flat_fee_cents = CASE
@@ -68,6 +69,10 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
     max_advance_days       = CASE
                                  WHEN @clear_max_advance::boolean THEN NULL
                                  ELSE COALESCE(sqlc.narg('max_advance_days')::integer, max_advance_days)
+                             END,
+    cancellation_notice_hours = CASE
+                                 WHEN @clear_cancellation_notice::boolean THEN NULL
+                                 ELSE COALESCE(sqlc.narg('cancellation_notice_hours')::integer, cancellation_notice_hours)
                              END,
     stripe_account_id      = CASE
                                  WHEN @clear_stripe_account::boolean THEN NULL
@@ -85,6 +90,50 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
 WHERE artist_id = @artist_id
 RETURNING *;
 
+-- ════════════════════════════════════════════════════════════════════════
+-- Stripe Connect (Express) account linkage + onboarding status
+-- ════════════════════════════════════════════════════════════════════════
+
+-- name: SetStripeAccount :one
+-- Links a freshly-created Connect account. Status flags start false; the real
+-- values arrive via the account.updated webhook / post-onboarding refresh.
+UPDATE artist_settings
+SET stripe_account_id        = @stripe_account_id::text,
+    stripe_charges_enabled   = false,
+    stripe_payouts_enabled   = false,
+    stripe_details_submitted = false,
+    updated_at               = now()
+WHERE artist_id = @artist_id
+RETURNING *;
+
+-- name: UpdateStripeAccountStatus :one
+UPDATE artist_settings
+SET stripe_charges_enabled   = @charges_enabled::boolean,
+    stripe_payouts_enabled   = @payouts_enabled::boolean,
+    stripe_details_submitted = @details_submitted::boolean,
+    updated_at               = now()
+WHERE artist_id = @artist_id
+RETURNING *;
+
+-- name: ClearStripeAccount :one
+UPDATE artist_settings
+SET stripe_account_id        = NULL,
+    stripe_charges_enabled   = false,
+    stripe_payouts_enabled   = false,
+    stripe_details_submitted = false,
+    updated_at               = now()
+WHERE artist_id = @artist_id
+RETURNING *;
+
+-- name: GetArtistSettingsByStripeAccount :one
+-- Resolves the owning artist from a Stripe account id (used by the webhook).
+SELECT * FROM artist_settings WHERE stripe_account_id = $1;
+
+-- ════════════════════════════════════════════════════════════════════════
+-- Google Calendar connection (OAuth tokens stored encrypted)
+-- ════════════════════════════════════════════════════════════════════════
+
+-- name: SetGoogleCalendarConnection :one
 UPDATE artist_settings
 SET google_calendar_email         = @google_calendar_email::text,
     google_calendar_access_token  = @access_token::text,
@@ -94,6 +143,7 @@ SET google_calendar_email         = @google_calendar_email::text,
 WHERE artist_id = @artist_id
 RETURNING *;
 
+-- name: ClearGoogleCalendarConnection :one
 UPDATE artist_settings
 SET google_calendar_email         = NULL,
     google_calendar_access_token  = NULL,

@@ -82,6 +82,11 @@ type ArtistSetting struct {
 	GoogleCalendarAccessToken  *string            `json:"google_calendar_access_token"`
 	GoogleCalendarRefreshToken *string            `json:"google_calendar_refresh_token"`
 	GoogleCalendarTokenExpiry  pgtype.Timestamptz `json:"google_calendar_token_expiry"`
+	StripeChargesEnabled       bool               `json:"stripe_charges_enabled"`
+	StripePayoutsEnabled       bool               `json:"stripe_payouts_enabled"`
+	StripeDetailsSubmitted     bool               `json:"stripe_details_submitted"`
+	DepositRefundPolicy        string             `json:"deposit_refund_policy"`
+	CancellationNoticeHours    *int32             `json:"cancellation_notice_hours"`
 }
 
 type Flash struct {

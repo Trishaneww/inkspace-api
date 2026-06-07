@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stripe/stripe-go/v82"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/crypto"
@@ -19,6 +20,13 @@ type Module struct {
 
 func New(cfg *config.Config, db *pgxpool.Pool, s3 *s3client.Client) *Module {
 	repo := NewRepository(db)
+
+	// Stripe uses a process-global API key. Inkspace is a single platform
+	// account, so setting it once at startup is correct. Empty key => Stripe
+	// integrations return ErrIntegrationConfig.
+	if cfg.StripeSecretKey != "" {
+		stripe.Key = cfg.StripeSecretKey
+	}
 
 	// Optional: only configured when OAUTH_TOKEN_ENCRYPTION_KEY is set. Without
 	// it, OAuth integrations (e.g. Google Calendar) return a clear error.

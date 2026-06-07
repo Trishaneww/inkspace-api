@@ -31,6 +31,7 @@ var (
 	ErrNotImplemented    = errors.New("not implemented")
 	ErrIntegrationConfig = errors.New("integration not configured on this server")
 	ErrOAuthExchange     = errors.New("could not complete the connection with the provider")
+	ErrStripeAPI         = errors.New("could not complete the request with Stripe")
 )
 
 const (
@@ -68,6 +69,11 @@ type Service interface {
 	PresignWaiverUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error)
 
 	// Integrations
+	ConnectStripe(ctx context.Context, userID uuid.UUID) (StripeConnectResponse, error)
+	RefreshStripeStatus(ctx context.Context, userID uuid.UUID) (ArtistSettings, error)
+	DisconnectStripe(ctx context.Context, userID uuid.UUID) (ArtistSettings, error)
+	HandleStripeWebhook(ctx context.Context, payload []byte, signature string) error
+
 	ConnectGoogleCalendar(ctx context.Context, userID uuid.UUID, input ConnectGoogleCalendarInput) (ArtistSettings, error)
 	DisconnectGoogleCalendar(ctx context.Context, userID uuid.UUID) (ArtistSettings, error)
 
@@ -248,36 +254,42 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 	if err := s.repo.EnsureArtistSettings(ctx, artist.ID); err != nil {
 		return ArtistSettings{}, err
 	}
+	current, err := s.repo.GetArtistSettings(ctx, artist.ID)
+	if err != nil {
+		return ArtistSettings{}, err
+	}
 
 	params := sqlc.UpdateArtistSettingsParams{
-		ArtistID:            artist.ID,
-		StudioName:          trimmedPtr(input.StudioName),
-		StudioAddress:       trimmedPtr(input.StudioAddress),
-		StudioCity:          trimmedPtr(input.StudioCity),
-		StudioProvince:      trimmedPtr(input.StudioProvince),
-		StudioPostalCode:    trimmedPtr(input.StudioPostalCode),
-		StudioCountry:       trimmedPtr(input.StudioCountry),
-		Timezone:            trimmedPtr(input.Timezone),
-		TermsText:           input.TermsText,
-		AcceptingBookings:   input.AcceptingBookings,
-		TermsShowOnBooking:  input.TermsShowOnBooking,
-		TermsShowAtDeposit:  input.TermsShowAtDeposit,
-		WaiverRequired:      input.WaiverRequired,
-		NotifyByEmail:       input.NotifyByEmail,
-		NotifyBySms:         input.NotifyBySms,
-		BufferMinutes:       input.BufferMinutes,
-		MinNoticeMinutes:    input.MinNoticeMinutes,
-		DepositFlatFeeCents: input.DepositFlatFeeCents,
-		ClearDepositFlatFee: input.ClearDepositFlatFee,
-		MaxAdvanceDays:      input.MaxAdvanceDays,
-		ClearMaxAdvance:     input.ClearMaxAdvance,
-		WaiverFileUrl:       input.WaiverFileURL,
-		ClearWaiverFile:     input.ClearWaiverFile,
+		ArtistID:                artist.ID,
+		StudioName:              trimmedPtr(input.StudioName),
+		StudioAddress:           trimmedPtr(input.StudioAddress),
+		StudioCity:              trimmedPtr(input.StudioCity),
+		StudioProvince:          trimmedPtr(input.StudioProvince),
+		StudioPostalCode:        trimmedPtr(input.StudioPostalCode),
+		StudioCountry:           trimmedPtr(input.StudioCountry),
+		Timezone:                trimmedPtr(input.Timezone),
+		TermsText:               input.TermsText,
+		AcceptingBookings:       input.AcceptingBookings,
+		TermsShowOnBooking:      input.TermsShowOnBooking,
+		TermsShowAtDeposit:      input.TermsShowAtDeposit,
+		WaiverRequired:          input.WaiverRequired,
+		NotifyByEmail:           input.NotifyByEmail,
+		NotifyBySms:             input.NotifyBySms,
+		BufferMinutes:           input.BufferMinutes,
+		MinNoticeMinutes:        input.MinNoticeMinutes,
+		DepositFlatFeeCents:     input.DepositFlatFeeCents,
+		ClearDepositFlatFee:     input.ClearDepositFlatFee,
+		MaxAdvanceDays:          input.MaxAdvanceDays,
+		ClearMaxAdvance:         input.ClearMaxAdvance,
+		WaiverFileUrl:           input.WaiverFileURL,
+		ClearWaiverFile:         input.ClearWaiverFile,
+		CancellationNoticeHours: input.CancellationNoticeHours,
+		ClearCancellationNotice: input.ClearCancellationNotice,
 	}
 
 	if input.PayoutFrequency != nil {
 		if !validPayoutFrequency(*input.PayoutFrequency) {
-			return ArtistSettings{}, fmt.Errorf("%w: payoutFrequency must be weekly, biweekly, or monthly", ErrInvalidInput)
+			return ArtistSettings{}, fmt.Errorf("%w: payoutFrequency must be weekly or monthly", ErrInvalidInput)
 		}
 		params.PayoutFrequency = input.PayoutFrequency
 	}
@@ -286,6 +298,12 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 			return ArtistSettings{}, fmt.Errorf("%w: platformFeePayer must be artist, client, or split", ErrInvalidInput)
 		}
 		params.PlatformFeePayer = input.PlatformFeePayer
+	}
+	if input.DepositRefundPolicy != nil {
+		if !validRefundPolicy(*input.DepositRefundPolicy) {
+			return ArtistSettings{}, fmt.Errorf("%w: depositRefundPolicy must be non_refundable, refundable_within_window, or always_refundable", ErrInvalidInput)
+		}
+		params.DepositRefundPolicy = input.DepositRefundPolicy
 	}
 	if input.Currency != nil {
 		currency := strings.ToUpper(strings.TrimSpace(*input.Currency))
@@ -299,6 +317,17 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 			return ArtistSettings{}, fmt.Errorf("%w: slotIntervalMinutes must be 15, 30, or 60", ErrInvalidInput)
 		}
 		params.SlotIntervalMinutes = input.SlotIntervalMinutes
+	}
+
+	// If the payout frequency changed and a Stripe account is connected, push the
+	// new schedule to Stripe first — only persist locally if Stripe accepts it,
+	// so the live schedule and the saved setting can't drift apart.
+	if input.PayoutFrequency != nil &&
+		*input.PayoutFrequency != current.PayoutFrequency &&
+		current.StripeAccountID != nil && *current.StripeAccountID != "" {
+		if err := s.syncStripePayoutSchedule(ctx, *current.StripeAccountID, *input.PayoutFrequency); err != nil {
+			return ArtistSettings{}, err
+		}
 	}
 
 	srow, err := s.repo.UpdateArtistSettings(ctx, params)
@@ -554,7 +583,15 @@ func parseDay(s string) (pgtype.Date, error) {
 
 func validPayoutFrequency(v string) bool {
 	switch PayoutFrequency(v) {
-	case PayoutWeekly, PayoutBiweekly, PayoutMonthly:
+	case PayoutWeekly, PayoutMonthly:
+		return true
+	}
+	return false
+}
+
+func validRefundPolicy(v string) bool {
+	switch DepositRefundPolicy(v) {
+	case RefundNonRefundable, RefundWithinWindow, RefundAlways:
 		return true
 	}
 	return false

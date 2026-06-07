@@ -17,6 +17,7 @@ type Config struct {
 	RabbitMQURL string
 
 	CORSAllowedOrigins string
+	FrontendURL        string
 
 	JWTSecret     string
 	JWTAccessTTL  time.Duration
@@ -30,17 +31,20 @@ type Config struct {
 	VonageAPISecret string
 	VonageFromName  string
 
-	GoogleClientID        string
-	GoogleClientSecret    string
-	MicrosoftClientID     string
-	MicrosoftClientSecret string
-	MicrosoftTenantID     string
+	GoogleClientID          string
+	GoogleClientSecret      string
+	MicrosoftClientID       string
+	MicrosoftClientSecret   string
+	MicrosoftTenantID       string
 	OAuthTokenEncryptionKey string
 
 	AWSRegion          string
 	AWSAccessKeyID     string
 	AWSSecretAccessKey string
 	AWSS3Bucket        string
+
+	StripeSecretKey     string
+	StripeWebhookSecret string
 }
 
 func Load() (*Config, error) {
@@ -55,6 +59,7 @@ func Load() (*Config, error) {
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
+		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:3000"),
 
 		VonageAPIKey:    os.Getenv("VONAGE_API_KEY"),
 		VonageAPISecret: os.Getenv("VONAGE_API_SECRET"),
@@ -72,6 +77,9 @@ func Load() (*Config, error) {
 		AWSAccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
 		AWSSecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
 		AWSS3Bucket:        os.Getenv("AWS_S3_BUCKET"),
+
+		StripeSecretKey:     os.Getenv("STRIPE_SECRET_KEY"),
+		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
 	}
 
 	if cfg.DatabaseURL == "" {

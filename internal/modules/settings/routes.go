@@ -7,6 +7,10 @@ import (
 )
 
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
+	// Public: Stripe calls this server-to-server. Authenticity comes from the
+	// Stripe-Signature header (verified in the service), not a JWT.
+	rg.POST("/webhooks/stripe", m.Handler.StripeWebhook)
+
 	authed := rg.Group("/current-user")
 	authed.Use(middleware.RequireAuth(m.cfg.JWTSecret))
 
@@ -16,7 +20,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	authed.POST("/avatar/presign", m.Handler.PresignAvatar)
 	authed.DELETE("/account", m.Handler.DeleteAccount) // Phase-2 stub
 
-	// Artist business configuration 
+	// Artist business configuration
 	artist := authed.Group("")
 	artist.Use(middleware.RequireRole(string(auth.RoleArtist)))
 
@@ -37,6 +41,9 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	artist.DELETE("/settings/blocklist/:id", m.Handler.RemoveBlocklistEntry)
 
 	artist.POST("/settings/stripe/connect", m.Handler.ConnectStripe)
+	artist.POST("/settings/stripe/refresh", m.Handler.RefreshStripeStatus)
+	artist.DELETE("/settings/stripe", m.Handler.DisconnectStripe)
+
 	artist.POST("/settings/google-calendar/connect", m.Handler.ConnectGoogleCalendar)
 	artist.DELETE("/settings/google-calendar", m.Handler.DisconnectGoogleCalendar)
 }
