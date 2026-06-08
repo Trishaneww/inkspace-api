@@ -22,6 +22,11 @@ type Repository interface {
 	// user_id → artist_id mapping
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error)
 	EnsureArtist(ctx context.Context, userID uuid.UUID) error
+	SetArtistOnboardedAt(ctx context.Context, artistID uuid.UUID) error
+
+	// Open Book (public booking link)
+	CreateOpenBook(ctx context.Context, params sqlc.CreateOpenBookParams) (sqlc.OpenBook, error)
+	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (sqlc.OpenBook, error)
 
 	// Artist settings (scalar config)
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
@@ -107,6 +112,18 @@ func (r *repository) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (s
 
 func (r *repository) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
 	return r.q.EnsureArtist(ctx, userID)
+}
+
+func (r *repository) SetArtistOnboardedAt(ctx context.Context, artistID uuid.UUID) error {
+	return r.q.SetArtistOnboardedAt(ctx, artistID)
+}
+
+func (r *repository) CreateOpenBook(ctx context.Context, params sqlc.CreateOpenBookParams) (sqlc.OpenBook, error) {
+	return r.q.CreateOpenBook(ctx, params)
+}
+
+func (r *repository) GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (sqlc.OpenBook, error) {
+	return r.q.GetOpenBookByArtist(ctx, artistID)
 }
 
 func (r *repository) EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error {

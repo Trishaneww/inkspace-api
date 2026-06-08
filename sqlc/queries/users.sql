@@ -19,9 +19,6 @@ SET password_hash = $2,
 WHERE id = $1;
 
 -- name: UpdateUnverifiedUser :one
--- Used when an in-progress signup re-submits with corrected data
--- (e.g. typo'd phone number). Only updates rows where the phone has
--- not yet been verified.
 UPDATE users
 SET password_hash = $2,
     role          = $3,

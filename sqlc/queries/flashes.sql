@@ -48,9 +48,6 @@ LIMIT @lim
 OFFSET @off;
 
 -- name: CountFlashesByArtist :one
--- `total` honours the optional status filter (so it matches the paginated
--- list), while `available` is always the unconditional available count for
--- use as a headline stat.
 SELECT
     COUNT(*) FILTER (
         WHERE sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')
@@ -109,8 +106,6 @@ WHERE id = @id
 RETURNING *;
 
 -- name: UnarchiveFlash :one
--- Restores a previously published flash to 'available', otherwise back to
--- 'draft', and clears the archived timestamp.
 UPDATE flashes
 SET status      = CASE
                       WHEN published_at IS NOT NULL THEN 'available'
@@ -129,8 +124,6 @@ DELETE FROM flashes WHERE id = $1;
 UPDATE flashes
 SET view_count = view_count + 1
 WHERE id = $1;
-
--- Pricing tiers ----------------------------------------------------------
 
 -- name: ListFlashPricingTiers :many
 SELECT *

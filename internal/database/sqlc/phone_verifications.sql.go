@@ -118,9 +118,6 @@ type RefreshPhoneVerificationCodeParams struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
-// Used when the user requests a resend. Rotates the code on the same
-// verification record (preserving its id, so the frontend's stored
-// verificationId keeps working) and resets the attempt counter.
 func (q *Queries) RefreshPhoneVerificationCode(ctx context.Context, arg RefreshPhoneVerificationCodeParams) error {
 	_, err := q.db.Exec(ctx, refreshPhoneVerificationCode, arg.ID, arg.CodeHash, arg.ExpiresAt)
 	return err

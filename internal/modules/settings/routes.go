@@ -11,6 +11,12 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	// Stripe-Signature header (verified in the service), not a JWT.
 	rg.POST("/webhooks/stripe", m.Handler.StripeWebhook)
 
+	onboarding := rg.Group("/onboarding")
+	onboarding.Use(middleware.RequireAuth(m.cfg.JWTSecret))
+	onboarding.Use(middleware.RequireRole(string(auth.RoleArtist)))
+	onboarding.GET("/username-available", m.Handler.CheckUsername)
+	onboarding.POST("", m.Handler.CompleteOnboarding)
+
 	authed := rg.Group("/current-user")
 	authed.Use(middleware.RequireAuth(m.cfg.JWTSecret))
 

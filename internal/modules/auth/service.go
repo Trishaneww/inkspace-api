@@ -75,7 +75,7 @@ func (s *service) Register(
 	firstName := strings.TrimSpace(in.FirstName)
 	lastName := strings.TrimSpace(in.LastName)
 	phone := strings.TrimSpace(in.Phone)
-	instagram := optionalString(in.InstagramURL)
+	var username, instagram *string
 
 	// Look up any existing row by email. An in-progress (unverified)
 	// signup is allowed to re-submit to correct typos; a verified user
@@ -87,15 +87,6 @@ func (s *service) Register(
 	}
 	if emailExists && existing.PhoneVerifiedAt.Valid {
 		return nil, ErrEmailTaken
-	}
-
-	var selfID uuid.UUID
-	if emailExists {
-		selfID = existing.ID
-	}
-	username, err := s.resolveUsername(ctx, in.Username, in.Role, selfID)
-	if err != nil {
-		return nil, err
 	}
 
 	// Reject phone reuse by ANY user other than the in-progress signup
@@ -147,45 +138,6 @@ func (s *service) Register(
 	}
 
 	return s.issuePhoneVerification(ctx, user)
-}
-
-// resolveUsername normalizes the requested username and enforces the rules:
-// required for artists, optional otherwise, and globally unique (ignoring the
-// in-progress signup itself, identified by selfID). Returns the value to store
-// (nil when blank for a non-artist).
-func (s *service) resolveUsername(
-	ctx context.Context, raw string, role Role, selfID uuid.UUID,
-) (*string, error) {
-	username := strings.TrimSpace(raw)
-	if username == "" {
-		if role == RoleArtist {
-			return nil, ErrUsernameRequired
-		}
-		return nil, nil
-	}
-
-	owner, err := s.repo.GetUserByUsername(ctx, &username)
-	switch {
-	case err == nil:
-		if owner.ID != selfID {
-			return nil, ErrUsernameTaken
-		}
-	case errors.Is(err, pgx.ErrNoRows):
-		// username is free
-	default:
-		return nil, err
-	}
-	return &username, nil
-}
-
-// optionalString trims input and returns nil for an empty value, so blank
-// optional fields are stored as SQL NULL rather than "".
-func optionalString(raw string) *string {
-	v := strings.TrimSpace(raw)
-	if v == "" {
-		return nil
-	}
-	return &v
 }
 
 // ── Login ────────────────────────────────────────────────────────
@@ -459,7 +411,7 @@ func (s *service) CompleteOAuthSignup(
 	phone := strings.TrimSpace(in.Phone)
 	firstName := strings.TrimSpace(in.FirstName)
 	lastName := strings.TrimSpace(in.LastName)
-	instagram := optionalString(in.InstagramURL)
+	var username, instagram *string
 	_ = claims
 
 	hashBytes, err := bcrypt.GenerateFromPassword(
@@ -477,15 +429,6 @@ func (s *service) CompleteOAuthSignup(
 	}
 	if emailExists && existing.PhoneVerifiedAt.Valid {
 		return nil, ErrEmailTaken
-	}
-
-	var selfID uuid.UUID
-	if emailExists {
-		selfID = existing.ID
-	}
-	username, err := s.resolveUsername(ctx, in.Username, in.Role, selfID)
-	if err != nil {
-		return nil, err
 	}
 
 	phoneOwner, err := s.repo.GetUserByPhone(ctx, &phone)
@@ -543,6 +486,20 @@ func (s *service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*User, 
 		return nil, err
 	}
 	u := userFromRecord(user)
+
+	if Role(user.Role) == RoleArtist {
+		onboardedAt, err := s.repo.GetArtistOnboardedAt(ctx, userID)
+		switch {
+		case err == nil:
+			if onboardedAt.Valid {
+				ts := onboardedAt.Time.UTC().Format(time.RFC3339)
+				u.OnboardedAt = &ts
+			}
+		case errors.Is(err, pgx.ErrNoRows):
+		default:
+			return nil, err
+		}
+	}
 	return &u, nil
 }
 

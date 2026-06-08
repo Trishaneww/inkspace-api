@@ -63,6 +63,10 @@ type Service interface {
 	ChangePassword(ctx context.Context, userID uuid.UUID, input ChangePasswordInput) error
 	PresignAvatarUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error)
 
+	// Onboarding (mandatory first-run setup → live Open Book)
+	CompleteOnboarding(ctx context.Context, userID uuid.UUID, input OnboardingInput) (OnboardingResponse, error)
+	CheckUsernameAvailable(ctx context.Context, userID uuid.UUID, username string) (UsernameAvailabilityResponse, error)
+
 	// Artist business config
 	UpdateSettings(ctx context.Context, userID uuid.UUID, input UpdateSettingsInput) (ArtistSettings, error)
 	SetAvailability(ctx context.Context, userID uuid.UUID, input SetAvailabilityInput) ([]AvailabilityWindow, error)
@@ -243,6 +247,123 @@ func (s *service) PresignAvatarUpload(ctx context.Context, userID uuid.UUID, con
 	}
 	key := fmt.Sprintf("avatars/%s/%s.%s", userID, uuid.New(), ext)
 	return s.presignPut(ctx, key, contentType)
+}
+
+// ── Onboarding ──────────────────────────────────────────────────────────────
+func (s *service) CheckUsernameAvailable(ctx context.Context, userID uuid.UUID, username string) (UsernameAvailabilityResponse, error) {
+	username = strings.TrimSpace(username)
+	if len(username) < 3 || len(username) > 30 {
+		return UsernameAvailabilityResponse{}, fmt.Errorf("%w: username must be 3–30 characters", ErrInvalidInput)
+	}
+	err := s.assertUsernameAvailable(ctx, username, userID)
+	switch {
+	case err == nil:
+		return UsernameAvailabilityResponse{Username: username, Available: true}, nil
+	case errors.Is(err, ErrUsernameTaken):
+		return UsernameAvailabilityResponse{Username: username, Available: false}, nil
+	default:
+		return UsernameAvailabilityResponse{}, err
+	}
+}
+
+func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, input OnboardingInput) (OnboardingResponse, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return OnboardingResponse{}, err
+	}
+	if artist.OnboardedAt.Valid {
+		return OnboardingResponse{}, fmt.Errorf("%w: onboarding already completed", ErrInvalidInput)
+	}
+
+	username := strings.TrimSpace(input.Username)
+	if username == "" {
+		return OnboardingResponse{}, fmt.Errorf("%w: username is required", ErrInvalidInput)
+	}
+	if err := s.assertUsernameAvailable(ctx, username, userID); err != nil {
+		return OnboardingResponse{}, err
+	}
+
+	mode := SchedulingMode(input.SchedulingMode)
+	if mode != SchedulingArtist && mode != SchedulingClient {
+		return OnboardingResponse{}, fmt.Errorf("%w: schedulingMode must be artist_scheduled or client_scheduled", ErrInvalidInput)
+	}
+
+	for _, w := range input.Availability {
+		if w.Weekday < 0 || w.Weekday > 6 {
+			return OnboardingResponse{}, fmt.Errorf("%w: weekday must be 0..6", ErrInvalidInput)
+		}
+		if w.EndMinute <= w.StartMinute {
+			return OnboardingResponse{}, fmt.Errorf("%w: a window's end must be after its start", ErrInvalidInput)
+		}
+	}
+
+	instagram := nilIfEmpty(trimmedPtr(&input.InstagramURL))
+
+	err = s.repo.RunInTx(ctx, func(tx Repository) error {
+		if err := tx.EnsureArtistSettings(ctx, artist.ID); err != nil {
+			return err
+		}
+
+		if _, err := tx.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
+			ID:           userID,
+			Username:     &username,
+			InstagramUrl: instagram,
+		}); err != nil {
+			return err
+		}
+
+		if _, err := tx.UpdateArtistSettings(ctx, sqlc.UpdateArtistSettingsParams{
+			ArtistID:            artist.ID,
+			StudioName:          trimmedPtr(&input.StudioName),
+			StudioAddress:       trimmedPtr(&input.StudioAddress),
+			StudioCity:          trimmedPtr(&input.StudioCity),
+			StudioProvince:      trimmedPtr(&input.StudioProvince),
+			StudioPostalCode:    trimmedPtr(&input.StudioPostalCode),
+			StudioCountry:       trimmedPtr(&input.StudioCountry),
+			Timezone:            trimmedPtr(&input.Timezone),
+			DepositFlatFeeCents: input.DepositFlatFeeCents,
+		}); err != nil {
+			return err
+		}
+
+		if len(input.Availability) > 0 {
+			if err := tx.DeleteAvailabilityWindows(ctx, artist.ID); err != nil {
+				return err
+			}
+			for _, w := range input.Availability {
+				if _, err := tx.InsertAvailabilityWindow(ctx, sqlc.InsertAvailabilityWindowParams{
+					ArtistID:    artist.ID,
+					Weekday:     w.Weekday,
+					StartMinute: w.StartMinute,
+					EndMinute:   w.EndMinute,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+
+		if _, err := tx.CreateOpenBook(ctx, sqlc.CreateOpenBookParams{
+			ArtistID:       artist.ID,
+			Slug:           username,
+			SchedulingMode: string(mode),
+		}); err != nil {
+			return err
+		}
+
+		return tx.SetArtistOnboardedAt(ctx, artist.ID)
+	})
+	if err != nil {
+		if isUniqueViolation(err) {
+			return OnboardingResponse{}, ErrUsernameTaken
+		}
+		return OnboardingResponse{}, err
+	}
+
+	return OnboardingResponse{
+		OnboardedAt:    time.Now().UTC().Format(time.RFC3339),
+		Slug:           username,
+		SchedulingMode: string(mode),
+	}, nil
 }
 
 // ── Artist business config ─────────────────────────────────────────────────

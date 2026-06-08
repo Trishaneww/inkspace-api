@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -18,11 +19,9 @@ type Querier interface {
 	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
-	// `total` honours the optional status filter (so it matches the paginated
-	// list), while `available` is always the unconditional available count for
-	// use as a headline stat.
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
 	CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash, error)
+	CreateOpenBook(ctx context.Context, arg CreateOpenBookParams) (OpenBook, error)
 	CreatePhoneVerification(ctx context.Context, arg CreatePhoneVerificationParams) (PhoneVerification, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSessionPreset(ctx context.Context, arg CreateSessionPresetParams) (ArtistSessionPreset, error)
@@ -35,85 +34,48 @@ type Querier interface {
 	DeleteFlashPricingTier(ctx context.Context, arg DeleteFlashPricingTierParams) error
 	DeleteSessionPreset(ctx context.Context, arg DeleteSessionPresetParams) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
-	// Provision an artist profile for a user. Idempotent: a no-op if the user
-	// already has one, so it's safe to call on activation and as a lazy net.
 	EnsureArtist(ctx context.Context, userID uuid.UUID) error
-	// ════════════════════════════════════════════════════════════════════════
-	// Artist settings (1:1 scalar config)
-	// ════════════════════════════════════════════════════════════════════════
-	// Lazily materialises a defaults row the first time an artist opens settings.
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
+	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
-	// Resolves the owning artist from a Stripe account id (used by the webhook).
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
+	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
+	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByPhone(ctx context.Context, phone *string) (User, error)
-	// ════════════════════════════════════════════════════════════════════════
-	// Account fields (users) — Settings → Personal Info / Email & Password
-	// ════════════════════════════════════════════════════════════════════════
 	GetUserByUsername(ctx context.Context, username *string) (User, error)
 	IncrementFlashViewCount(ctx context.Context, id uuid.UUID) error
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
 	InsertAvailabilityWindow(ctx context.Context, arg InsertAvailabilityWindowParams) (ArtistAvailabilityWindow, error)
-	// ════════════════════════════════════════════════════════════════════════
-	// Weekly availability windows (replace-all semantics)
-	// ════════════════════════════════════════════════════════════════════════
 	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]ArtistAvailabilityWindow, error)
-	// ════════════════════════════════════════════════════════════════════════
-	// Blocklist
-	// ════════════════════════════════════════════════════════════════════════
 	ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]ArtistBlocklist, error)
-	// ════════════════════════════════════════════════════════════════════════
-	// Days off
-	// ════════════════════════════════════════════════════════════════════════
 	ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]ArtistDaysOff, error)
-	// Pricing tiers ----------------------------------------------------------
 	ListFlashPricingTiers(ctx context.Context, flashID uuid.UUID) ([]FlashPricingTier, error)
-	// Batched fetch for a page of flashes, avoiding an N+1 of ListFlashPricingTiers.
-	// Ordered by flash so callers can group sequentially, then by size.
 	ListFlashPricingTiersForFlashes(ctx context.Context, flashIds []uuid.UUID) ([]FlashPricingTier, error)
 	ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error)
-	// ════════════════════════════════════════════════════════════════════════
-	// Session-type presets
-	// ════════════════════════════════════════════════════════════════════════
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
 	PublishFlash(ctx context.Context, id uuid.UUID) (Flash, error)
-	// Used when the user requests a resend. Rotates the code on the same
-	// verification record (preserving its id, so the frontend's stored
-	// verificationId keeps working) and resets the attempt counter.
 	RefreshPhoneVerificationCode(ctx context.Context, arg RefreshPhoneVerificationCodeParams) error
 	RemoveBlocklistEntry(ctx context.Context, arg RemoveBlocklistEntryParams) error
 	RemoveDayOff(ctx context.Context, arg RemoveDayOffParams) error
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
-	// ════════════════════════════════════════════════════════════════════════
-	// Google Calendar connection (OAuth tokens stored encrypted)
-	// ════════════════════════════════════════════════════════════════════════
+	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
-	// ════════════════════════════════════════════════════════════════════════
-	// Stripe Connect (Express) account linkage + onboarding status
-	// ════════════════════════════════════════════════════════════════════════
-	// Links a freshly-created Connect account. Status flags start false; the real
-	// values arrive via the account.updated webhook / post-onboarding refresh.
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
-	// Restores a previously published flash to 'available', otherwise back to
-	// 'draft', and clears the archived timestamp.
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)
 	UpdateSessionPreset(ctx context.Context, arg UpdateSessionPresetParams) (ArtistSessionPreset, error)
 	UpdateStripeAccountStatus(ctx context.Context, arg UpdateStripeAccountStatusParams) (ArtistSetting, error)
-	// Used when an in-progress signup re-submits with corrected data
-	// (e.g. typo'd phone number). Only updates rows where the phone has
-	// not yet been verified.
 	UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error)
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error

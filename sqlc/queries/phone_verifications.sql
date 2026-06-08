@@ -15,9 +15,6 @@ SET attempts = attempts + 1
 WHERE id = $1;
 
 -- name: RefreshPhoneVerificationCode :exec
--- Used when the user requests a resend. Rotates the code on the same
--- verification record (preserving its id, so the frontend's stored
--- verificationId keeps working) and resets the attempt counter.
 UPDATE phone_verifications
 SET code_hash = $2,
     expires_at = $3,

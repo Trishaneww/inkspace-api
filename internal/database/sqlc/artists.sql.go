@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const ensureArtist = `-- name: EnsureArtist :exec
@@ -17,15 +18,13 @@ VALUES ($1)
 ON CONFLICT (user_id) DO NOTHING
 `
 
-// Provision an artist profile for a user. Idempotent: a no-op if the user
-// already has one, so it's safe to call on activation and as a lazy net.
 func (q *Queries) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, ensureArtist, userID)
 	return err
 }
 
 const getArtistByUserID = `-- name: GetArtistByUserID :one
-SELECT id, user_id, created_at, updated_at FROM artists WHERE user_id = $1
+SELECT id, user_id, created_at, updated_at, onboarded_at FROM artists WHERE user_id = $1
 `
 
 func (q *Queries) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error) {
@@ -36,6 +35,30 @@ func (q *Queries) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Arti
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OnboardedAt,
 	)
 	return i, err
+}
+
+const getArtistOnboardedAt = `-- name: GetArtistOnboardedAt :one
+SELECT onboarded_at FROM artists WHERE user_id = $1
+`
+
+func (q *Queries) GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getArtistOnboardedAt, userID)
+	var onboarded_at pgtype.Timestamptz
+	err := row.Scan(&onboarded_at)
+	return onboarded_at, err
+}
+
+const setArtistOnboardedAt = `-- name: SetArtistOnboardedAt :exec
+UPDATE artists
+SET onboarded_at = now(),
+    updated_at   = now()
+WHERE id = $1
+`
+
+func (q *Queries) SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, setArtistOnboardedAt, id)
+	return err
 }

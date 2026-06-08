@@ -291,9 +291,6 @@ type UpdateUnverifiedUserParams struct {
 	InstagramUrl *string   `json:"instagram_url"`
 }
 
-// Used when an in-progress signup re-submits with corrected data
-// (e.g. typo'd phone number). Only updates rows where the phone has
-// not yet been verified.
 func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, updateUnverifiedUser,
 		arg.ID,

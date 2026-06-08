@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 )
@@ -19,6 +20,7 @@ type Repository interface {
 
 	// EnsureArtist provisions the artist profile row for a user (idempotent).
 	EnsureArtist(ctx context.Context, userID uuid.UUID) error
+	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
 
 	CreatePhoneVerification(
 		ctx context.Context,
@@ -103,6 +105,12 @@ func (r *repository) EnsureArtist(
 	ctx context.Context, userID uuid.UUID,
 ) error {
 	return r.q.EnsureArtist(ctx, userID)
+}
+
+func (r *repository) GetArtistOnboardedAt(
+	ctx context.Context, userID uuid.UUID,
+) (pgtype.Timestamptz, error) {
+	return r.q.GetArtistOnboardedAt(ctx, userID)
 }
 
 func (r *repository) CreatePhoneVerification(

@@ -30,6 +30,13 @@ const (
 	RefundAlways        DepositRefundPolicy = "always_refundable"
 )
 
+type SchedulingMode string
+
+const (
+	SchedulingArtist SchedulingMode = "artist_scheduled"
+	SchedulingClient SchedulingMode = "client_scheduled"
+)
+
 // ── Response shapes ──────────────────────────────────────────────────────
 type Account struct {
 	ID           string `json:"id"`
@@ -223,4 +230,34 @@ type CreateBlocklistInput struct {
 type ConnectGoogleCalendarInput struct {
 	Code        string `json:"code"        binding:"required"`
 	RedirectURI string `json:"redirectUri" binding:"required"`
+}
+
+// ── Onboarding ─────────────────────────────────────────────────────────────
+type OnboardingInput struct {
+	Username     string `json:"username"     binding:"required,min=3,max=30"`
+	InstagramURL string `json:"instagramUrl" binding:"omitempty,url,max=255"`
+
+	StudioName       string `json:"studioName"       binding:"required"`
+	StudioAddress    string `json:"studioAddress"    binding:"required"`
+	StudioCity       string `json:"studioCity"       binding:"required"`
+	StudioProvince   string `json:"studioProvince"   binding:"required"`
+	StudioPostalCode string `json:"studioPostalCode" binding:"required"`
+	StudioCountry    string `json:"studioCountry"    binding:"required"`
+	Timezone         string `json:"timezone"         binding:"required"`
+
+	Availability []AvailabilityWindowInput `json:"availability"`
+
+	DepositFlatFeeCents *int64 `json:"depositFlatFeeCents"`
+	SchedulingMode      string `json:"schedulingMode" binding:"required,oneof=artist_scheduled client_scheduled"`
+}
+
+type OnboardingResponse struct {
+	OnboardedAt    string `json:"onboardedAt"`
+	Slug           string `json:"slug"`
+	SchedulingMode string `json:"schedulingMode"`
+}
+
+type UsernameAvailabilityResponse struct {
+	Username  string `json:"username"`
+	Available bool   `json:"available"`
 }

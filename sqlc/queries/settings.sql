@@ -1,7 +1,3 @@
--- ════════════════════════════════════════════════════════════════════════
--- Account fields (users) — Settings → Personal Info / Email & Password
--- ════════════════════════════════════════════════════════════════════════
-
 -- name: GetUserByUsername :one
 SELECT * FROM users WHERE username = $1;
 
@@ -24,12 +20,7 @@ SET email      = @email,
 WHERE id = @id
 RETURNING *;
 
--- ════════════════════════════════════════════════════════════════════════
--- Artist settings (1:1 scalar config)
--- ════════════════════════════════════════════════════════════════════════
-
 -- name: EnsureArtistSettings :exec
--- Lazily materialises a defaults row the first time an artist opens settings.
 INSERT INTO artist_settings (artist_id)
 VALUES ($1)
 ON CONFLICT (artist_id) DO NOTHING;
@@ -90,13 +81,7 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
 WHERE artist_id = @artist_id
 RETURNING *;
 
--- ════════════════════════════════════════════════════════════════════════
--- Stripe Connect (Express) account linkage + onboarding status
--- ════════════════════════════════════════════════════════════════════════
-
 -- name: SetStripeAccount :one
--- Links a freshly-created Connect account. Status flags start false; the real
--- values arrive via the account.updated webhook / post-onboarding refresh.
 UPDATE artist_settings
 SET stripe_account_id        = @stripe_account_id::text,
     stripe_charges_enabled   = false,
@@ -126,12 +111,7 @@ WHERE artist_id = @artist_id
 RETURNING *;
 
 -- name: GetArtistSettingsByStripeAccount :one
--- Resolves the owning artist from a Stripe account id (used by the webhook).
 SELECT * FROM artist_settings WHERE stripe_account_id = $1;
-
--- ════════════════════════════════════════════════════════════════════════
--- Google Calendar connection (OAuth tokens stored encrypted)
--- ════════════════════════════════════════════════════════════════════════
 
 -- name: SetGoogleCalendarConnection :one
 UPDATE artist_settings
@@ -153,10 +133,6 @@ SET google_calendar_email         = NULL,
 WHERE artist_id = @artist_id
 RETURNING *;
 
--- ════════════════════════════════════════════════════════════════════════
--- Weekly availability windows (replace-all semantics)
--- ════════════════════════════════════════════════════════════════════════
-
 -- name: ListAvailabilityWindows :many
 SELECT *
 FROM artist_availability_windows
@@ -170,10 +146,6 @@ DELETE FROM artist_availability_windows WHERE artist_id = $1;
 INSERT INTO artist_availability_windows (artist_id, weekday, start_minute, end_minute)
 VALUES (@artist_id, @weekday, @start_minute, @end_minute)
 RETURNING *;
-
--- ════════════════════════════════════════════════════════════════════════
--- Session-type presets
--- ════════════════════════════════════════════════════════════════════════
 
 -- name: ListSessionPresets :many
 SELECT *
@@ -199,10 +171,6 @@ RETURNING *;
 DELETE FROM artist_session_presets
 WHERE id = @id AND artist_id = @artist_id;
 
--- ════════════════════════════════════════════════════════════════════════
--- Days off
--- ════════════════════════════════════════════════════════════════════════
-
 -- name: ListDaysOff :many
 SELECT *
 FROM artist_days_off
@@ -217,10 +185,6 @@ ON CONFLICT (artist_id, day) DO NOTHING;
 -- name: RemoveDayOff :exec
 DELETE FROM artist_days_off
 WHERE artist_id = @artist_id AND day = @day;
-
--- ════════════════════════════════════════════════════════════════════════
--- Blocklist
--- ════════════════════════════════════════════════════════════════════════
 
 -- name: ListBlocklist :many
 SELECT *

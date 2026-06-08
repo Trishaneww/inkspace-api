@@ -230,16 +230,11 @@ func (q *Queries) DeleteSessionPreset(ctx context.Context, arg DeleteSessionPres
 }
 
 const ensureArtistSettings = `-- name: EnsureArtistSettings :exec
-
 INSERT INTO artist_settings (artist_id)
 VALUES ($1)
 ON CONFLICT (artist_id) DO NOTHING
 `
 
-// ════════════════════════════════════════════════════════════════════════
-// Artist settings (1:1 scalar config)
-// ════════════════════════════════════════════════════════════════════════
-// Lazily materialises a defaults row the first time an artist opens settings.
 func (q *Queries) EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, ensureArtistSettings, artistID)
 	return err
@@ -297,7 +292,6 @@ const getArtistSettingsByStripeAccount = `-- name: GetArtistSettingsByStripeAcco
 SELECT artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours FROM artist_settings WHERE stripe_account_id = $1
 `
 
-// Resolves the owning artist from a Stripe account id (used by the webhook).
 func (q *Queries) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error) {
 	row := q.db.QueryRow(ctx, getArtistSettingsByStripeAccount, stripeAccountID)
 	var i ArtistSetting
@@ -343,13 +337,9 @@ func (q *Queries) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAc
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-
 SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url FROM users WHERE username = $1
 `
 
-// ════════════════════════════════════════════════════════════════════════
-// Account fields (users) — Settings → Personal Info / Email & Password
-// ════════════════════════════════════════════════════════════════════════
 func (q *Queries) GetUserByUsername(ctx context.Context, username *string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByUsername, username)
 	var i User
@@ -404,16 +394,12 @@ func (q *Queries) InsertAvailabilityWindow(ctx context.Context, arg InsertAvaila
 }
 
 const listAvailabilityWindows = `-- name: ListAvailabilityWindows :many
-
 SELECT id, artist_id, weekday, start_minute, end_minute
 FROM artist_availability_windows
 WHERE artist_id = $1
 ORDER BY weekday, start_minute
 `
 
-// ════════════════════════════════════════════════════════════════════════
-// Weekly availability windows (replace-all semantics)
-// ════════════════════════════════════════════════════════════════════════
 func (q *Queries) ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]ArtistAvailabilityWindow, error) {
 	rows, err := q.db.Query(ctx, listAvailabilityWindows, artistID)
 	if err != nil {
@@ -441,16 +427,12 @@ func (q *Queries) ListAvailabilityWindows(ctx context.Context, artistID uuid.UUI
 }
 
 const listBlocklist = `-- name: ListBlocklist :many
-
 SELECT id, artist_id, email, phone, note, created_at
 FROM artist_blocklist
 WHERE artist_id = $1
 ORDER BY created_at DESC
 `
 
-// ════════════════════════════════════════════════════════════════════════
-// Blocklist
-// ════════════════════════════════════════════════════════════════════════
 func (q *Queries) ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]ArtistBlocklist, error) {
 	rows, err := q.db.Query(ctx, listBlocklist, artistID)
 	if err != nil {
@@ -479,16 +461,12 @@ func (q *Queries) ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]Arti
 }
 
 const listDaysOff = `-- name: ListDaysOff :many
-
 SELECT artist_id, day
 FROM artist_days_off
 WHERE artist_id = $1
 ORDER BY day
 `
 
-// ════════════════════════════════════════════════════════════════════════
-// Days off
-// ════════════════════════════════════════════════════════════════════════
 func (q *Queries) ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]ArtistDaysOff, error) {
 	rows, err := q.db.Query(ctx, listDaysOff, artistID)
 	if err != nil {
@@ -510,16 +488,12 @@ func (q *Queries) ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]Artist
 }
 
 const listSessionPresets = `-- name: ListSessionPresets :many
-
 SELECT id, artist_id, name, description, approx_duration_minutes, position, created_at
 FROM artist_session_presets
 WHERE artist_id = $1
 ORDER BY position, created_at
 `
 
-// ════════════════════════════════════════════════════════════════════════
-// Session-type presets
-// ════════════════════════════════════════════════════════════════════════
 func (q *Queries) ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error) {
 	rows, err := q.db.Query(ctx, listSessionPresets, artistID)
 	if err != nil {
@@ -579,7 +553,6 @@ func (q *Queries) RemoveDayOff(ctx context.Context, arg RemoveDayOffParams) erro
 }
 
 const setGoogleCalendarConnection = `-- name: SetGoogleCalendarConnection :one
-
 UPDATE artist_settings
 SET google_calendar_email         = $1::text,
     google_calendar_access_token  = $2::text,
@@ -598,9 +571,6 @@ type SetGoogleCalendarConnectionParams struct {
 	ArtistID            uuid.UUID          `json:"artist_id"`
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// Google Calendar connection (OAuth tokens stored encrypted)
-// ════════════════════════════════════════════════════════════════════════
 func (q *Queries) SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error) {
 	row := q.db.QueryRow(ctx, setGoogleCalendarConnection,
 		arg.GoogleCalendarEmail,
@@ -652,7 +622,6 @@ func (q *Queries) SetGoogleCalendarConnection(ctx context.Context, arg SetGoogle
 }
 
 const setStripeAccount = `-- name: SetStripeAccount :one
-
 UPDATE artist_settings
 SET stripe_account_id        = $1::text,
     stripe_charges_enabled   = false,
@@ -668,11 +637,6 @@ type SetStripeAccountParams struct {
 	ArtistID        uuid.UUID `json:"artist_id"`
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// Stripe Connect (Express) account linkage + onboarding status
-// ════════════════════════════════════════════════════════════════════════
-// Links a freshly-created Connect account. Status flags start false; the real
-// values arrive via the account.updated webhook / post-onboarding refresh.
 func (q *Queries) SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error) {
 	row := q.db.QueryRow(ctx, setStripeAccount, arg.StripeAccountID, arg.ArtistID)
 	var i ArtistSetting

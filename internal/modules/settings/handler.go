@@ -2,9 +2,11 @@ package settings
 
 import (
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/httpx"
@@ -106,6 +108,38 @@ func (h *Handler) PresignAvatar(c *gin.Context) {
 
 func (h *Handler) DeleteAccount(c *gin.Context) {
 	httpx.NotImplemented(c)
+}
+
+// ── Onboarding ──────────────────────────────────────────────────────────────
+func (h *Handler) CompleteOnboarding(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	var input OnboardingInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, 400, "invalid_request", onboardingBindMessage(err))
+		return
+	}
+	resp, err := h.svc.CompleteOnboarding(c.Request.Context(), userID, input)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, resp)
+}
+
+func (h *Handler) CheckUsername(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.CheckUsernameAvailable(c.Request.Context(), userID, c.Query("username"))
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, resp)
 }
 
 // ── Artist business config ─────────────────────────────────────────────────
@@ -385,6 +419,48 @@ func parseIDParam(c *gin.Context, name string) (uuid.UUID, bool) {
 		return uuid.Nil, false
 	}
 	return id, true
+}
+
+var onboardingFieldLabels = map[string]string{
+	"Username":         "username",
+	"InstagramURL":     "Instagram handle",
+	"StudioName":       "studio name",
+	"StudioAddress":    "studio address",
+	"StudioCity":       "city",
+	"StudioProvince":   "province",
+	"StudioPostalCode": "postal code",
+	"StudioCountry":    "country",
+	"Timezone":         "timezone",
+	"SchedulingMode":   "scheduling option",
+}
+
+func onboardingBindMessage(err error) string {
+	var verrs validator.ValidationErrors
+	if !errors.As(err, &verrs) || len(verrs) == 0 {
+		return "Some details look incorrect. Please review and try again."
+	}
+
+	fe := verrs[0]
+	label := onboardingFieldLabels[fe.Field()]
+	if label == "" {
+		label = "details"
+	}
+
+	switch fe.Tag() {
+	case "required":
+		return fmt.Sprintf("Please enter your %s.", label)
+	case "url":
+		return "That doesn't look like a valid Instagram handle."
+	case "oneof":
+		return "Please choose how you want to schedule."
+	case "min", "max":
+		if fe.Field() == "Username" {
+			return "Your username must be 3–30 characters."
+		}
+		return fmt.Sprintf("Please check your %s.", label)
+	default:
+		return fmt.Sprintf("Please check your %s.", label)
+	}
 }
 
 func respondServiceError(c *gin.Context, err error) {

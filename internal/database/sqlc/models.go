@@ -12,10 +12,11 @@ import (
 )
 
 type Artist struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    uuid.UUID          `json:"user_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID          uuid.UUID          `json:"id"`
+	UserID      uuid.UUID          `json:"user_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	OnboardedAt pgtype.Timestamptz `json:"onboarded_at"`
 }
 
 type ArtistAvailabilityWindow struct {
@@ -120,6 +121,15 @@ type FlashPricingTier struct {
 	SizeCode        string    `json:"size_code"`
 	DurationMinutes int32     `json:"duration_minutes"`
 	PriceCents      int64     `json:"price_cents"`
+}
+
+type OpenBook struct {
+	ID             uuid.UUID          `json:"id"`
+	ArtistID       uuid.UUID          `json:"artist_id"`
+	Slug           string             `json:"slug"`
+	SchedulingMode string             `json:"scheduling_mode"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type PhoneVerification struct {

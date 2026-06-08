@@ -23,7 +23,11 @@ type User struct {
 	Phone           string  `json:"phone,omitempty"`
 	AvatarURL       string  `json:"avatarUrl,omitempty"`
 	PhoneVerifiedAt *string `json:"phoneVerifiedAt,omitempty"`
-	CreatedAt       string  `json:"createdAt"`
+	// OnboardedAt is set once an artist finishes the mandatory onboarding flow.
+	// Absent/null for artists who haven't onboarded (which gates the onboarding
+	// modal) and for non-artist accounts.
+	OnboardedAt *string `json:"onboardedAt,omitempty"`
+	CreatedAt   string  `json:"createdAt"`
 }
 
 func userFromRecord(u sqlc.User) User {
@@ -60,10 +64,8 @@ type RegisterInput struct {
 	Phone     string `json:"phone"     binding:"required,min=7,max=20"`
 	Password  string `json:"password"  binding:"required,min=8"`
 	Role      Role   `json:"role"      binding:"required,oneof=artist studio_admin user"`
-	// Username is required for artists (it backs their public booking link) and
-	// optional otherwise; enforced in the service since it's role-dependent.
-	Username     string `json:"username"     binding:"omitempty,min=3,max=30"`
-	InstagramURL string `json:"instagramUrl" binding:"omitempty,url,max=255"`
+	// Username + Instagram are no longer collected at signup — artists provide
+	// them in the mandatory onboarding flow, keeping signup minimal.
 }
 
 type LoginInput struct {
@@ -99,8 +101,7 @@ type OAuthCompleteInput struct {
 	Password     string `json:"password"     binding:"required,min=8"`
 	Phone        string `json:"phone"        binding:"required,min=7,max=20"`
 	Role         Role   `json:"role"         binding:"required,oneof=artist studio_admin user"`
-	Username     string `json:"username"     binding:"omitempty,min=3,max=30"`
-	InstagramURL string `json:"instagramUrl" binding:"omitempty,url,max=255"`
+	// Username + Instagram are collected in onboarding, not here.
 }
 
 // ── Response shapes ──────────────────────────────────────────────
