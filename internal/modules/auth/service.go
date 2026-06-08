@@ -283,11 +283,16 @@ func (s *service) VerifyPhone(
 		return nil, err
 	}
 
+	respUser, err := s.buildUserResponse(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AuthenticatedResponse{
 		Status:       "authenticated",
 		Token:        pair.AccessToken,
 		RefreshToken: pair.RefreshToken,
-		User:         userFromRecord(user),
+		User:         respUser,
 	}, nil
 }
 
@@ -376,11 +381,15 @@ func (s *service) OAuthCallback(
 		if err != nil {
 			return nil, err
 		}
+		respUser, err := s.buildUserResponse(ctx, user)
+		if err != nil {
+			return nil, err
+		}
 		return &AuthenticatedResponse{
 			Status:       "authenticated",
 			Token:        pair.AccessToken,
 			RefreshToken: pair.RefreshToken,
-			User:         userFromRecord(user),
+			User:         respUser,
 		}, nil
 	case errors.Is(err, pgx.ErrNoRows):
 		sessionTok, err := signOAuthSession(s.cfg, claims, in.Provider)
@@ -479,26 +488,35 @@ func (s *service) CompleteOAuthSignup(
 }
 
 // ── Current user / Logout ────────────────────────────────────────
+func (s *service) buildUserResponse(ctx context.Context, user sqlc.User) (User, error) {
+	u := userFromRecord(user)
+	if Role(user.Role) != RoleArtist {
+		return u, nil
+	}
+
+	onboardedAt, err := s.repo.GetArtistOnboardedAt(ctx, user.ID)
+	switch {
+	case err == nil:
+		if onboardedAt.Valid {
+			ts := onboardedAt.Time.UTC().Format(time.RFC3339)
+			u.OnboardedAt = &ts
+		}
+	case errors.Is(err, pgx.ErrNoRows):
+		// No artist row yet → treat as not onboarded.
+	default:
+		return User{}, err
+	}
+	return u, nil
+}
 
 func (s *service) GetCurrentUser(ctx context.Context, userID uuid.UUID) (*User, error) {
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	u := userFromRecord(user)
-
-	if Role(user.Role) == RoleArtist {
-		onboardedAt, err := s.repo.GetArtistOnboardedAt(ctx, userID)
-		switch {
-		case err == nil:
-			if onboardedAt.Valid {
-				ts := onboardedAt.Time.UTC().Format(time.RFC3339)
-				u.OnboardedAt = &ts
-			}
-		case errors.Is(err, pgx.ErrNoRows):
-		default:
-			return nil, err
-		}
+	u, err := s.buildUserResponse(ctx, user)
+	if err != nil {
+		return nil, err
 	}
 	return &u, nil
 }
