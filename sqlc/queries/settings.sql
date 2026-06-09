@@ -51,6 +51,7 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
     notify_by_email        = COALESCE(sqlc.narg('notify_by_email')::boolean,     notify_by_email),
     notify_by_sms          = COALESCE(sqlc.narg('notify_by_sms')::boolean,       notify_by_sms),
     deposit_refund_policy  = COALESCE(sqlc.narg('deposit_refund_policy')::text,  deposit_refund_policy),
+    styles                 = COALESCE(sqlc.narg('styles')::text[],              styles),
 
     -- Nullable fields support explicit clearing via a paired boolean.
     deposit_flat_fee_cents = CASE

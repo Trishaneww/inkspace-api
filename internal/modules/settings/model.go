@@ -88,6 +88,8 @@ type ArtistSettings struct {
 
 	NotifyByEmail bool `json:"notifyByEmail"`
 	NotifyBySms   bool `json:"notifyBySms"`
+
+	Styles []string `json:"styles"`
 }
 
 type AvailabilityWindow struct {
@@ -184,6 +186,8 @@ type UpdateSettingsInput struct {
 
 	CancellationNoticeHours *int32 `json:"cancellationNoticeHours"`
 	ClearCancellationNotice bool   `json:"clearCancellationNotice"`
+
+	Styles *[]string `json:"styles"`
 }
 
 // StripeConnectResponse carries the Stripe-hosted onboarding URL the frontend
@@ -249,6 +253,8 @@ type OnboardingInput struct {
 
 	DepositFlatFeeCents *int64 `json:"depositFlatFeeCents"`
 	SchedulingMode      string `json:"schedulingMode" binding:"required,oneof=artist_scheduled client_scheduled"`
+	
+	Styles []string `json:"styles"`
 }
 
 type OnboardingResponse struct {
@@ -260,4 +266,17 @@ type OnboardingResponse struct {
 type UsernameAvailabilityResponse struct {
 	Username  string `json:"username"`
 	Available bool   `json:"available"`
+}
+
+// ── Open Book ────────────────────────────────────────────────────────────────
+type OpenBookResponse struct {
+	Slug            string   `json:"slug"`
+	SchedulingMode  string   `json:"schedulingMode"`
+	CustomQuestions []string `json:"customQuestions"`
+}
+
+type UpdateOpenBookInput struct {
+	Slug            *string   `json:"slug"`
+	SchedulingMode  *string   `json:"schedulingMode"`
+	CustomQuestions *[]string `json:"customQuestions"`
 }

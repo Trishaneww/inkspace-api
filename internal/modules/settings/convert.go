@@ -60,13 +60,16 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 		WaiverRequired:          r.WaiverRequired,
 		NotifyByEmail:           r.NotifyByEmail,
 		NotifyBySms:             r.NotifyBySms,
+		Styles:                  r.Styles,
+	}
+	if out.Styles == nil {
+		out.Styles = []string{}
 	}
 	if r.GoogleCalendarEmail != nil && *r.GoogleCalendarEmail != "" {
 		out.GoogleCalendarConnected = true
 		out.GoogleCalendarEmail = *r.GoogleCalendarEmail
 	}
 	if r.WaiverFileUrl != nil {
-		// Replaced with a presigned GET URL by the service before returning.
 		out.WaiverFileURL = *r.WaiverFileUrl
 	}
 	return out
