@@ -21,11 +21,11 @@ func accountFromUser(u sqlc.User) Account {
 	if u.Phone != nil {
 		out.Phone = *u.Phone
 	}
-	if u.AvatarUrl != nil {
-		out.AvatarURL = *u.AvatarUrl
+	if u.AvatarURL != nil {
+		out.AvatarURL = *u.AvatarURL
 	}
-	if u.InstagramUrl != nil {
-		out.InstagramURL = *u.InstagramUrl
+	if u.InstagramURL != nil {
+		out.InstagramURL = *u.InstagramURL
 	}
 	return out
 }
@@ -59,7 +59,7 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 		TermsShowAtDeposit:      r.TermsShowAtDeposit,
 		WaiverRequired:          r.WaiverRequired,
 		NotifyByEmail:           r.NotifyByEmail,
-		NotifyBySms:             r.NotifyBySms,
+		NotifyBySMS:             r.NotifyBySMS,
 		Styles:                  r.Styles,
 	}
 	if out.Styles == nil {
@@ -69,8 +69,8 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 		out.GoogleCalendarConnected = true
 		out.GoogleCalendarEmail = *r.GoogleCalendarEmail
 	}
-	if r.WaiverFileUrl != nil {
-		out.WaiverFileURL = *r.WaiverFileUrl
+	if r.WaiverFileURL != nil {
+		out.WaiverFileURL = *r.WaiverFileURL
 	}
 	return out
 }

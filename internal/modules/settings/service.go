@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,6 +28,7 @@ var (
 	ErrArtistMissing     = errors.New("user has no artist profile")
 	ErrEmailTaken        = errors.New("email already in use")
 	ErrUsernameTaken     = errors.New("username already in use")
+	ErrSlugTaken         = errors.New("that booking link is already taken")
 	ErrPhoneTaken        = errors.New("phone number already in use")
 	ErrNotImplemented    = errors.New("not implemented")
 	ErrIntegrationConfig = errors.New("integration not configured on this server")
@@ -63,9 +65,13 @@ type Service interface {
 	ChangePassword(ctx context.Context, userID uuid.UUID, input ChangePasswordInput) error
 	PresignAvatarUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error)
 
-	// Onboarding (mandatory first-run setup → live Open Book)
+	// Onboarding
 	CompleteOnboarding(ctx context.Context, userID uuid.UUID, input OnboardingInput) (OnboardingResponse, error)
 	CheckUsernameAvailable(ctx context.Context, userID uuid.UUID, username string) (UsernameAvailabilityResponse, error)
+
+	// Open Book
+	GetOpenBook(ctx context.Context, userID uuid.UUID) (OpenBookResponse, error)
+	UpdateOpenBook(ctx context.Context, userID uuid.UUID, input UpdateOpenBookInput) (OpenBookResponse, error)
 
 	// Artist business config
 	UpdateSettings(ctx context.Context, userID uuid.UUID, input UpdateSettingsInput) (ArtistSettings, error)
@@ -167,8 +173,8 @@ func (s *service) UpdateProfile(ctx context.Context, userID uuid.UUID, input Upd
 
 	params.FirstName = trimmedPtr(input.FirstName)
 	params.LastName = trimmedPtr(input.LastName)
-	params.AvatarUrl = trimmedPtr(input.AvatarURL)
-	params.InstagramUrl = trimmedPtr(input.InstagramURL)
+	params.AvatarURL = trimmedPtr(input.AvatarURL)
+	params.InstagramURL = trimmedPtr(input.InstagramURL)
 
 	if input.Username != nil {
 		username := strings.TrimSpace(*input.Username)
@@ -195,6 +201,18 @@ func (s *service) UpdateProfile(ctx context.Context, userID uuid.UUID, input Upd
 		}
 		return Account{}, err
 	}
+
+	if input.Username != nil && params.Username != nil {
+		if artist, aerr := s.repo.GetArtistByUserID(ctx, userID); aerr == nil {
+			if _, oerr := s.repo.UpdateOpenBook(ctx, sqlc.UpdateOpenBookParams{
+				ArtistID: artist.ID,
+				Slug:     params.Username,
+			}); oerr != nil && !errors.Is(oerr, pgx.ErrNoRows) {
+				return Account{}, oerr
+			}
+		}
+	}
+
 	return s.accountResponse(ctx, updated), nil
 }
 
@@ -206,7 +224,6 @@ func (s *service) ChangeEmail(ctx context.Context, userID uuid.UUID, input Chang
 
 	newEmail := strings.ToLower(strings.TrimSpace(input.NewEmail))
 	if newEmail == strings.ToLower(user.Email) {
-		// No-op change; return current account.
 		return s.accountResponse(ctx, user), nil
 	}
 
@@ -217,7 +234,6 @@ func (s *service) ChangeEmail(ctx context.Context, userID uuid.UUID, input Chang
 			return Account{}, ErrEmailTaken
 		}
 	case errors.Is(err, pgx.ErrNoRows):
-		// free
 	default:
 		return Account{}, err
 	}
@@ -288,6 +304,13 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 		return OnboardingResponse{}, fmt.Errorf("%w: schedulingMode must be artist_scheduled or client_scheduled", ErrInvalidInput)
 	}
 
+	if len(input.Styles) == 0 {
+		return OnboardingResponse{}, fmt.Errorf("%w: select at least one style", ErrInvalidInput)
+	}
+	if !allValidStyles(input.Styles) {
+		return OnboardingResponse{}, fmt.Errorf("%w: unknown tattoo style", ErrInvalidInput)
+	}
+
 	for _, w := range input.Availability {
 		if w.Weekday < 0 || w.Weekday > 6 {
 			return OnboardingResponse{}, fmt.Errorf("%w: weekday must be 0..6", ErrInvalidInput)
@@ -307,7 +330,7 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 		if _, err := tx.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
 			ID:           userID,
 			Username:     &username,
-			InstagramUrl: instagram,
+			InstagramURL: instagram,
 		}); err != nil {
 			return err
 		}
@@ -322,16 +345,17 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 			StudioCountry:       trimmedPtr(&input.StudioCountry),
 			Timezone:            trimmedPtr(&input.Timezone),
 			DepositFlatFeeCents: input.DepositFlatFeeCents,
+			Styles:              input.Styles,
 		}); err != nil {
 			return err
 		}
 
 		if len(input.Availability) > 0 {
-			if err := tx.DeleteAvailabilityWindows(ctx, artist.ID); err != nil {
-				return err
-			}
-			for _, w := range input.Availability {
-				if _, err := tx.InsertAvailabilityWindow(ctx, sqlc.InsertAvailabilityWindowParams{
+		if err := tx.DeleteAllAvailabilityWindows(ctx, artist.ID); err != nil {
+			return err
+		}
+		for _, w := range input.Availability {
+			if _, err := tx.CreateAvailabilityWindow(ctx, sqlc.CreateAvailabilityWindowParams{
 					ArtistID:    artist.ID,
 					Weekday:     w.Weekday,
 					StartMinute: w.StartMinute,
@@ -366,6 +390,119 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 	}, nil
 }
 
+// ── Open Book ────────────────────────────────────────────────────────────────
+func (s *service) GetOpenBook(ctx context.Context, userID uuid.UUID) (OpenBookResponse, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return OpenBookResponse{}, err
+	}
+	book, err := s.repo.GetOpenBookByArtist(ctx, artist.ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return OpenBookResponse{}, ErrNotFound
+		}
+		return OpenBookResponse{}, err
+	}
+	return openBookResponse(book), nil
+}
+
+func (s *service) UpdateOpenBook(ctx context.Context, userID uuid.UUID, input UpdateOpenBookInput) (OpenBookResponse, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return OpenBookResponse{}, err
+	}
+
+	params := sqlc.UpdateOpenBookParams{ArtistID: artist.ID}
+
+	if input.SchedulingMode != nil {
+		mode := SchedulingMode(*input.SchedulingMode)
+		if mode != SchedulingArtist && mode != SchedulingClient {
+			return OpenBookResponse{}, fmt.Errorf("%w: schedulingMode must be artist_scheduled or client_scheduled", ErrInvalidInput)
+		}
+		params.SchedulingMode = input.SchedulingMode
+	}
+
+	if input.Slug != nil {
+		slug := strings.TrimSpace(*input.Slug)
+		if !validSlug(slug) {
+			return OpenBookResponse{}, fmt.Errorf("%w: booking link must be 3–30 characters (letters, numbers, underscores)", ErrInvalidInput)
+		}
+		owner, err := s.repo.GetOpenBookBySlug(ctx, slug)
+		switch {
+		case err == nil:
+			if owner.ArtistID != artist.ID {
+				return OpenBookResponse{}, ErrSlugTaken
+			}
+		case errors.Is(err, pgx.ErrNoRows):
+		default:
+			return OpenBookResponse{}, err
+		}
+		params.Slug = &slug
+	}
+
+	if input.CustomQuestions != nil {
+		questions := make([]string, 0, len(*input.CustomQuestions))
+		for _, q := range *input.CustomQuestions {
+			if q = strings.TrimSpace(q); q != "" {
+				questions = append(questions, q)
+			}
+		}
+		if len(questions) > 3 {
+			return OpenBookResponse{}, fmt.Errorf("%w: you can add up to 3 custom questions", ErrInvalidInput)
+		}
+		raw, err := json.Marshal(questions)
+		if err != nil {
+			return OpenBookResponse{}, err
+		}
+		params.CustomQuestions = raw
+	}
+
+	book, err := s.repo.UpdateOpenBook(ctx, params)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return OpenBookResponse{}, ErrSlugTaken
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return OpenBookResponse{}, ErrNotFound
+		}
+		return OpenBookResponse{}, err
+	}
+	return openBookResponse(book), nil
+}
+
+func openBookResponse(book sqlc.OpenBook) OpenBookResponse {
+	return OpenBookResponse{
+		Slug:            book.Slug,
+		SchedulingMode:  book.SchedulingMode,
+		CustomQuestions: parseQuestions(book.CustomQuestions),
+	}
+}
+
+func parseQuestions(raw []byte) []string {
+	questions := []string{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &questions)
+	}
+	if questions == nil {
+		questions = []string{}
+	}
+	return questions
+}
+
+func validSlug(s string) bool {
+	if len(s) < 3 || len(s) > 30 {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // ── Artist business config ─────────────────────────────────────────────────
 func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input UpdateSettingsInput) (ArtistSettings, error) {
 	artist, err := s.requireArtist(ctx, userID)
@@ -395,17 +532,17 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 		TermsShowAtDeposit:      input.TermsShowAtDeposit,
 		WaiverRequired:          input.WaiverRequired,
 		NotifyByEmail:           input.NotifyByEmail,
-		NotifyBySms:             input.NotifyBySms,
+		NotifyBySMS:             input.NotifyBySMS,
 		BufferMinutes:           input.BufferMinutes,
 		MinNoticeMinutes:        input.MinNoticeMinutes,
 		DepositFlatFeeCents:     input.DepositFlatFeeCents,
 		ClearDepositFlatFee:     input.ClearDepositFlatFee,
 		MaxAdvanceDays:          input.MaxAdvanceDays,
-		ClearMaxAdvance:         input.ClearMaxAdvance,
-		WaiverFileUrl:           input.WaiverFileURL,
-		ClearWaiverFile:         input.ClearWaiverFile,
-		CancellationNoticeHours: input.CancellationNoticeHours,
-		ClearCancellationNotice: input.ClearCancellationNotice,
+		ClearMaxAdvanceDays:         input.ClearMaxAdvanceDays,
+		WaiverFileURL:               input.WaiverFileURL,
+		ClearWaiverFile:             input.ClearWaiverFile,
+		CancellationNoticeHours:     input.CancellationNoticeHours,
+		ClearCancellationNoticeHours: input.ClearCancellationNoticeHours,
 	}
 
 	if input.PayoutFrequency != nil {
@@ -438,6 +575,15 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 			return ArtistSettings{}, fmt.Errorf("%w: slotIntervalMinutes must be 15, 30, or 60", ErrInvalidInput)
 		}
 		params.SlotIntervalMinutes = input.SlotIntervalMinutes
+	}
+	if input.Styles != nil {
+		if len(*input.Styles) == 0 {
+			return ArtistSettings{}, fmt.Errorf("%w: select at least one style", ErrInvalidInput)
+		}
+		if !allValidStyles(*input.Styles) {
+			return ArtistSettings{}, fmt.Errorf("%w: unknown tattoo style", ErrInvalidInput)
+		}
+		params.Styles = *input.Styles
 	}
 
 	// If the payout frequency changed and a Stripe account is connected, push the
@@ -474,11 +620,11 @@ func (s *service) SetAvailability(ctx context.Context, userID uuid.UUID, input S
 
 	var saved []sqlc.ArtistAvailabilityWindow
 	err = s.repo.RunInTx(ctx, func(tx Repository) error {
-		if err := tx.DeleteAvailabilityWindows(ctx, artist.ID); err != nil {
+		if err := tx.DeleteAllAvailabilityWindows(ctx, artist.ID); err != nil {
 			return err
 		}
 		for _, w := range input.Windows {
-			row, err := tx.InsertAvailabilityWindow(ctx, sqlc.InsertAvailabilityWindowParams{
+			row, err := tx.CreateAvailabilityWindow(ctx, sqlc.CreateAvailabilityWindowParams{
 				ArtistID:    artist.ID,
 				Weekday:     w.Weekday,
 				StartMinute: w.StartMinute,
@@ -668,8 +814,6 @@ func (s *service) settingsResponse(ctx context.Context, r sqlc.ArtistSetting) Ar
 	return out
 }
 
-// presignKey turns a stored S3 key into a short-lived GET URL. Empty keys and
-// presign failures degrade to an empty string rather than failing the request.
 func (s *service) presignKey(ctx context.Context, key string) string {
 	if key == "" {
 		return ""
