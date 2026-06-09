@@ -142,6 +142,38 @@ func (h *Handler) CheckUsername(c *gin.Context) {
 	httpx.OK(c, resp)
 }
 
+// ── Open Book ────────────────────────────────────────────────────────────────
+func (h *Handler) GetOpenBook(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	book, err := h.svc.GetOpenBook(c.Request.Context(), userID)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, book)
+}
+
+func (h *Handler) UpdateOpenBook(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	var input UpdateOpenBookInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, 400, "invalid_request", err.Error())
+		return
+	}
+	book, err := h.svc.UpdateOpenBook(c.Request.Context(), userID, input)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, book)
+}
+
 // ── Artist business config ─────────────────────────────────────────────────
 func (h *Handler) UpdateSettings(c *gin.Context) {
 	userID, ok := requireUserID(c)
@@ -475,6 +507,8 @@ func respondServiceError(c *gin.Context, err error) {
 		httpx.Error(c, 409, "email_taken", err.Error())
 	case errors.Is(err, ErrUsernameTaken):
 		httpx.Error(c, 409, "username_taken", err.Error())
+	case errors.Is(err, ErrSlugTaken):
+		httpx.Error(c, 409, "slug_taken", err.Error())
 	case errors.Is(err, ErrPhoneTaken):
 		httpx.Error(c, 409, "phone_taken", err.Error())
 	case errors.Is(err, ErrInvalidInput):

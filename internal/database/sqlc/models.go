@@ -74,10 +74,10 @@ type ArtistSetting struct {
 	TermsText                  string             `json:"terms_text"`
 	TermsShowOnBooking         bool               `json:"terms_show_on_booking"`
 	TermsShowAtDeposit         bool               `json:"terms_show_at_deposit"`
-	WaiverFileUrl              *string            `json:"waiver_file_url"`
+	WaiverFileURL              *string            `json:"waiver_file_url"`
 	WaiverRequired             bool               `json:"waiver_required"`
 	NotifyByEmail              bool               `json:"notify_by_email"`
-	NotifyBySms                bool               `json:"notify_by_sms"`
+	NotifyBySMS                bool               `json:"notify_by_sms"`
 	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
 	GoogleCalendarAccessToken  *string            `json:"google_calendar_access_token"`
@@ -88,6 +88,33 @@ type ArtistSetting struct {
 	StripeDetailsSubmitted     bool               `json:"stripe_details_submitted"`
 	DepositRefundPolicy        string             `json:"deposit_refund_policy"`
 	CancellationNoticeHours    *int32             `json:"cancellation_notice_hours"`
+	Styles                     []string           `json:"styles"`
+}
+
+type BookingRequest struct {
+	ID                     uuid.UUID          `json:"id"`
+	ArtistID               uuid.UUID          `json:"artist_id"`
+	OpenBookID             uuid.UUID          `json:"open_book_id"`
+	Type                   string             `json:"type"`
+	FlashID                pgtype.UUID        `json:"flash_id"`
+	Description            string             `json:"description"`
+	ReferenceImageKeys     []string           `json:"reference_image_keys"`
+	Placement              string             `json:"placement"`
+	ApproxSizeInches       *int32             `json:"approx_size_inches"`
+	ClientAvailability     []byte             `json:"client_availability"`
+	ClientName             string             `json:"client_name"`
+	ClientEmail            string             `json:"client_email"`
+	ClientPhone            *string            `json:"client_phone"`
+	Status                 string             `json:"status"`
+	DepositStatus          string             `json:"deposit_status"`
+	WaiverStatus           string             `json:"waiver_status"`
+	SessionDurationMinutes *int32             `json:"session_duration_minutes"`
+	ClientUserID           pgtype.UUID        `json:"client_user_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DecidedAt              pgtype.Timestamptz `json:"decided_at"`
+	Styles                 []string           `json:"styles"`
+	CustomAnswers          []byte             `json:"custom_answers"`
 }
 
 type Flash struct {
@@ -124,12 +151,13 @@ type FlashPricingTier struct {
 }
 
 type OpenBook struct {
-	ID             uuid.UUID          `json:"id"`
-	ArtistID       uuid.UUID          `json:"artist_id"`
-	Slug           string             `json:"slug"`
-	SchedulingMode string             `json:"scheduling_mode"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID              uuid.UUID          `json:"id"`
+	ArtistID        uuid.UUID          `json:"artist_id"`
+	Slug            string             `json:"slug"`
+	SchedulingMode  string             `json:"scheduling_mode"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	CustomQuestions []byte             `json:"custom_questions"`
 }
 
 type PhoneVerification struct {
@@ -143,6 +171,27 @@ type PhoneVerification struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type PortfolioItem struct {
+	ID               uuid.UUID          `json:"id"`
+	ArtistID         uuid.UUID          `json:"artist_id"`
+	Status           string             `json:"status"`
+	Title            string             `json:"title"`
+	Description      *string            `json:"description"`
+	CompletionDate   pgtype.Date        `json:"completion_date"`
+	ImageKeys        []string           `json:"image_keys"`
+	Styles           []string           `json:"styles"`
+	Placement        *string            `json:"placement"`
+	ColorType        *string            `json:"color_type"`
+	ApproxSizeInches *int32             `json:"approx_size_inches"`
+	Healed           bool               `json:"healed"`
+	SessionCount     *int32             `json:"session_count"`
+	TotalMinutes     *int32             `json:"total_minutes"`
+	ArchivedAt       pgtype.Timestamptz `json:"archived_at"`
+	PublishedAt      pgtype.Timestamptz `json:"published_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type RefreshToken struct {
 	ID        uuid.UUID          `json:"id"`
 	UserID    uuid.UUID          `json:"user_id"`
@@ -150,7 +199,7 @@ type RefreshToken struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
 	UserAgent *string            `json:"user_agent"`
-	IpAddress *netip.Addr        `json:"ip_address"`
+	IPAddress *netip.Addr        `json:"ip_address"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -167,6 +216,6 @@ type User struct {
 	Phone           *string            `json:"phone"`
 	PhoneVerifiedAt pgtype.Timestamptz `json:"phone_verified_at"`
 	Username        *string            `json:"username"`
-	AvatarUrl       *string            `json:"avatar_url"`
-	InstagramUrl    *string            `json:"instagram_url"`
+	AvatarURL       *string            `json:"avatar_url"`
+	InstagramURL    *string            `json:"instagram_url"`
 }

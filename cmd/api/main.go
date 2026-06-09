@@ -8,10 +8,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
 	"github.com/trishaneupnexx/inkspace-api/internal/maintenance"
+	"github.com/trishaneupnexx/inkspace-api/internal/redisclient"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 	"github.com/trishaneupnexx/inkspace-api/internal/server"
 )
@@ -51,7 +54,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := server.New(cfg, log, db, pub, s3)
+	// Redis backs distributed rate limiting. Required in production (validated
+	// in config); optional in dev, where limiting is simply skipped.
+	var rdb *redis.Client
+	if cfg.RedisURL != "" {
+		rdb, err = redisclient.New(ctx, cfg.RedisURL)
+		if err != nil {
+			log.Error("redis_init_failed", "error", err)
+			os.Exit(1)
+		}
+		defer func() { _ = rdb.Close() }()
+	}
+
+	srv := server.New(cfg, log, db, pub, s3, rdb)
 	go maintenance.NewCleaner(db, log, cleanupInterval).Run(ctx)
 
 	go func() {
