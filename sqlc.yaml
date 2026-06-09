@@ -12,6 +12,12 @@ sql:
         emit_interface: true
         emit_prepared_queries: false
         emit_pointers_for_null_types: true
+        rename:
+          waiver_file_url: WaiverFileURL
+          avatar_url: AvatarURL
+          instagram_url: InstagramURL
+          notify_by_sms: NotifyBySMS
+          ip_address: IPAddress
         overrides:
           - db_type: "citext"
             go_type: "string"

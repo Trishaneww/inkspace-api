@@ -8,68 +8,101 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	AddBlocklistEntry(ctx context.Context, arg AddBlocklistEntryParams) (ArtistBlocklist, error)
+	AddDayOff(ctx context.Context, arg AddDayOffParams) error
 	ArchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
+	ArchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	ClaimFlash(ctx context.Context, arg ClaimFlashParams) (Flash, error)
+	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
+	ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
-	// `total` honours the optional status filter (so it matches the paginated
-	// list), while `available` is always the unconditional available count for
-	// use as a headline stat.
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
-	CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error)
+	CountPortfolioItemsByArtist(ctx context.Context, arg CountPortfolioItemsByArtistParams) (CountPortfolioItemsByArtistRow, error)
+	CreateAvailabilityWindow(ctx context.Context, arg CreateAvailabilityWindowParams) (ArtistAvailabilityWindow, error)
+	CreateBookingRequest(ctx context.Context, arg CreateBookingRequestParams) (BookingRequest, error)
 	CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash, error)
+	CreateOpenBook(ctx context.Context, arg CreateOpenBookParams) (OpenBook, error)
 	CreatePhoneVerification(ctx context.Context, arg CreatePhoneVerificationParams) (PhoneVerification, error)
+	CreatePortfolioItem(ctx context.Context, arg CreatePortfolioItemParams) (PortfolioItem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	CreateSessionPreset(ctx context.Context, arg CreateSessionPresetParams) (ArtistSessionPreset, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteAllAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error
 	DeleteAllFlashPricingTiers(ctx context.Context, flashID uuid.UUID) error
-	DeleteArtist(ctx context.Context, id uuid.UUID) error
 	DeleteExpiredPhoneVerifications(ctx context.Context) (int64, error)
 	DeleteExpiredRefreshTokens(ctx context.Context) (int64, error)
 	DeleteFlash(ctx context.Context, id uuid.UUID) error
 	DeleteFlashPricingTier(ctx context.Context, arg DeleteFlashPricingTierParams) error
+	DeletePortfolioItem(ctx context.Context, id uuid.UUID) error
+	DeleteSessionPreset(ctx context.Context, arg DeleteSessionPresetParams) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	EnsureArtist(ctx context.Context, userID uuid.UUID) error
+	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
-	GetArtistAvailability(ctx context.Context, artistID uuid.UUID) (ArtistAvailability, error)
-	GetArtistByHandle(ctx context.Context, handle string) (Artist, error)
-	GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
+	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
+	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
+	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
+	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
+	// Counts that back the dashboard stat cards.
+	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
+	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
+	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
+	GetPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByPhone(ctx context.Context, phone *string) (User, error)
+	GetUserByUsername(ctx context.Context, username *string) (User, error)
 	IncrementFlashViewCount(ctx context.Context, id uuid.UUID) error
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
-	ListArtists(ctx context.Context, arg ListArtistsParams) ([]Artist, error)
-	// Pricing tiers ----------------------------------------------------------
+	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]ArtistAvailabilityWindow, error)
+	ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]ArtistBlocklist, error)
+	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error)
+	ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]ArtistDaysOff, error)
 	ListFlashPricingTiers(ctx context.Context, flashID uuid.UUID) ([]FlashPricingTier, error)
 	// Batched fetch for a page of flashes, avoiding an N+1 of ListFlashPricingTiers.
 	// Ordered by flash so callers can group sequentially, then by size.
 	ListFlashPricingTiersForFlashes(ctx context.Context, flashIds []uuid.UUID) ([]FlashPricingTier, error)
 	ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error)
+	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
+	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
 	PublishFlash(ctx context.Context, id uuid.UUID) (Flash, error)
-	// Used when the user requests a resend. Rotates the code on the same
-	// verification record (preserving its id, so the frontend's stored
-	// verificationId keeps working) and resets the attempt counter.
+	PublishPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	RefreshPhoneVerificationCode(ctx context.Context, arg RefreshPhoneVerificationCodeParams) error
+	RemoveBlocklistEntry(ctx context.Context, arg RemoveBlocklistEntryParams) error
+	RemoveDayOff(ctx context.Context, arg RemoveDayOffParams) error
+	// Undo a decision: return the request to the inbox as a fresh (pending) lead.
+	ReopenBookingRequest(ctx context.Context, arg ReopenBookingRequestParams) (BookingRequest, error)
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
-	// Restores a previously published flash to 'available', otherwise back to
-	// 'draft', and clears the archived timestamp.
+	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
+	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
+	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
-	UpdateArtist(ctx context.Context, arg UpdateArtistParams) (Artist, error)
+	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
+	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
+	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)
-	// Used when an in-progress signup re-submits with corrected data
-	// (e.g. typo'd phone number). Only updates rows where the phone has
-	// not yet been verified.
+	UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) (OpenBook, error)
+	// Full-field replace: the edit sheet submits the complete item state, so a
+	// nil narg here intentionally clears the column (lets the artist remove an
+	// optional value, which a COALESCE-merge update couldn't).
+	UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error)
+	UpdateSessionPreset(ctx context.Context, arg UpdateSessionPresetParams) (ArtistSessionPreset, error)
+	UpdateStripeAccountStatus(ctx context.Context, arg UpdateStripeAccountStatusParams) (ArtistSetting, error)
 	UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error)
+	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
-	UpsertArtistAvailability(ctx context.Context, arg UpsertArtistAvailabilityParams) (ArtistAvailability, error)
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	UpsertFlashPricingTier(ctx context.Context, arg UpsertFlashPricingTierParams) (FlashPricingTier, error)
 }
 

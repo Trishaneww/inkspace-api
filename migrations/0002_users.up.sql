@@ -9,7 +9,11 @@ CREATE TABLE users (
     first_name        TEXT,
     last_name         TEXT,
     phone             TEXT,
-    phone_verified_at TIMESTAMPTZ
+    phone_verified_at TIMESTAMPTZ,
+
+    username          CITEXT,
+    avatar_url        TEXT,
+    instagram_url     TEXT
 );
 
 CREATE INDEX idx_users_role ON users (role);
@@ -17,6 +21,10 @@ CREATE INDEX idx_users_role ON users (role);
 CREATE UNIQUE INDEX idx_users_phone_unique
     ON users (phone)
     WHERE phone IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_users_username_unique
+    ON users (username)
+    WHERE username IS NOT NULL;
 
 CREATE TABLE refresh_tokens (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

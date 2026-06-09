@@ -9,127 +9,22 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createArtist = `-- name: CreateArtist :one
-INSERT INTO artists (user_id, handle, display_name, bio, styles, city, country, booking_link)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, user_id, handle, display_name, bio, styles, city, country, booking_link, created_at, updated_at
+const ensureArtist = `-- name: EnsureArtist :exec
+INSERT INTO artists (user_id)
+VALUES ($1)
+ON CONFLICT (user_id) DO NOTHING
 `
 
-type CreateArtistParams struct {
-	UserID      uuid.UUID `json:"user_id"`
-	Handle      string    `json:"handle"`
-	DisplayName string    `json:"display_name"`
-	Bio         string    `json:"bio"`
-	Styles      []string  `json:"styles"`
-	City        *string   `json:"city"`
-	Country     *string   `json:"country"`
-	BookingLink *string   `json:"booking_link"`
-}
-
-func (q *Queries) CreateArtist(ctx context.Context, arg CreateArtistParams) (Artist, error) {
-	row := q.db.QueryRow(ctx, createArtist,
-		arg.UserID,
-		arg.Handle,
-		arg.DisplayName,
-		arg.Bio,
-		arg.Styles,
-		arg.City,
-		arg.Country,
-		arg.BookingLink,
-	)
-	var i Artist
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Handle,
-		&i.DisplayName,
-		&i.Bio,
-		&i.Styles,
-		&i.City,
-		&i.Country,
-		&i.BookingLink,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const deleteArtist = `-- name: DeleteArtist :exec
-DELETE FROM artists WHERE id = $1
-`
-
-func (q *Queries) DeleteArtist(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteArtist, id)
+func (q *Queries) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, ensureArtist, userID)
 	return err
 }
 
-const getArtistAvailability = `-- name: GetArtistAvailability :one
-SELECT artist_id, accepting_new, weekly_windows, waitlist_days, updated_at FROM artist_availability WHERE artist_id = $1
-`
-
-func (q *Queries) GetArtistAvailability(ctx context.Context, artistID uuid.UUID) (ArtistAvailability, error) {
-	row := q.db.QueryRow(ctx, getArtistAvailability, artistID)
-	var i ArtistAvailability
-	err := row.Scan(
-		&i.ArtistID,
-		&i.AcceptingNew,
-		&i.WeeklyWindows,
-		&i.WaitlistDays,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getArtistByHandle = `-- name: GetArtistByHandle :one
-SELECT id, user_id, handle, display_name, bio, styles, city, country, booking_link, created_at, updated_at FROM artists WHERE handle = $1
-`
-
-func (q *Queries) GetArtistByHandle(ctx context.Context, handle string) (Artist, error) {
-	row := q.db.QueryRow(ctx, getArtistByHandle, handle)
-	var i Artist
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Handle,
-		&i.DisplayName,
-		&i.Bio,
-		&i.Styles,
-		&i.City,
-		&i.Country,
-		&i.BookingLink,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getArtistByID = `-- name: GetArtistByID :one
-SELECT id, user_id, handle, display_name, bio, styles, city, country, booking_link, created_at, updated_at FROM artists WHERE id = $1
-`
-
-func (q *Queries) GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error) {
-	row := q.db.QueryRow(ctx, getArtistByID, id)
-	var i Artist
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Handle,
-		&i.DisplayName,
-		&i.Bio,
-		&i.Styles,
-		&i.City,
-		&i.Country,
-		&i.BookingLink,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getArtistByUserID = `-- name: GetArtistByUserID :one
-SELECT id, user_id, handle, display_name, bio, styles, city, country, booking_link, created_at, updated_at FROM artists WHERE user_id = $1
+SELECT id, user_id, created_at, updated_at, onboarded_at FROM artists WHERE user_id = $1
 `
 
 func (q *Queries) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error) {
@@ -138,157 +33,32 @@ func (q *Queries) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Arti
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Handle,
-		&i.DisplayName,
-		&i.Bio,
-		&i.Styles,
-		&i.City,
-		&i.Country,
-		&i.BookingLink,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.OnboardedAt,
 	)
 	return i, err
 }
 
-const listArtists = `-- name: ListArtists :many
-SELECT id, user_id, handle, display_name, bio, styles, city, country, booking_link, created_at, updated_at FROM artists
-WHERE ($1::text IS NULL OR city = $1)
-  AND ($2::text IS NULL OR country = $2)
-  AND (cardinality($3::text[]) = 0 OR styles && $3::text[])
-ORDER BY created_at DESC
-LIMIT $5
-OFFSET $4
+const getArtistOnboardedAt = `-- name: GetArtistOnboardedAt :one
+SELECT onboarded_at FROM artists WHERE user_id = $1
 `
 
-type ListArtistsParams struct {
-	City    *string  `json:"city"`
-	Country *string  `json:"country"`
-	Styles  []string `json:"styles"`
-	Off     int32    `json:"off"`
-	Lim     int32    `json:"lim"`
+func (q *Queries) GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getArtistOnboardedAt, userID)
+	var onboarded_at pgtype.Timestamptz
+	err := row.Scan(&onboarded_at)
+	return onboarded_at, err
 }
 
-func (q *Queries) ListArtists(ctx context.Context, arg ListArtistsParams) ([]Artist, error) {
-	rows, err := q.db.Query(ctx, listArtists,
-		arg.City,
-		arg.Country,
-		arg.Styles,
-		arg.Off,
-		arg.Lim,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Artist
-	for rows.Next() {
-		var i Artist
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Handle,
-			&i.DisplayName,
-			&i.Bio,
-			&i.Styles,
-			&i.City,
-			&i.Country,
-			&i.BookingLink,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateArtist = `-- name: UpdateArtist :one
+const setArtistOnboardedAt = `-- name: SetArtistOnboardedAt :exec
 UPDATE artists
-SET display_name = COALESCE($1::text, display_name),
-    bio          = COALESCE($2::text, bio),
-    styles       = COALESCE($3::text[], styles),
-    city         = COALESCE($4::text, city),
-    country      = COALESCE($5::text, country),
-    booking_link = COALESCE($6::text, booking_link),
+SET onboarded_at = now(),
     updated_at   = now()
-WHERE id = $7
-RETURNING id, user_id, handle, display_name, bio, styles, city, country, booking_link, created_at, updated_at
+WHERE id = $1
 `
 
-type UpdateArtistParams struct {
-	DisplayName *string   `json:"display_name"`
-	Bio         *string   `json:"bio"`
-	Styles      []string  `json:"styles"`
-	City        *string   `json:"city"`
-	Country     *string   `json:"country"`
-	BookingLink *string   `json:"booking_link"`
-	ID          uuid.UUID `json:"id"`
-}
-
-func (q *Queries) UpdateArtist(ctx context.Context, arg UpdateArtistParams) (Artist, error) {
-	row := q.db.QueryRow(ctx, updateArtist,
-		arg.DisplayName,
-		arg.Bio,
-		arg.Styles,
-		arg.City,
-		arg.Country,
-		arg.BookingLink,
-		arg.ID,
-	)
-	var i Artist
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Handle,
-		&i.DisplayName,
-		&i.Bio,
-		&i.Styles,
-		&i.City,
-		&i.Country,
-		&i.BookingLink,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const upsertArtistAvailability = `-- name: UpsertArtistAvailability :one
-INSERT INTO artist_availability (artist_id, accepting_new, weekly_windows, waitlist_days)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (artist_id) DO UPDATE
-SET accepting_new  = EXCLUDED.accepting_new,
-    weekly_windows = EXCLUDED.weekly_windows,
-    waitlist_days  = EXCLUDED.waitlist_days,
-    updated_at     = now()
-RETURNING artist_id, accepting_new, weekly_windows, waitlist_days, updated_at
-`
-
-type UpsertArtistAvailabilityParams struct {
-	ArtistID      uuid.UUID `json:"artist_id"`
-	AcceptingNew  bool      `json:"accepting_new"`
-	WeeklyWindows []byte    `json:"weekly_windows"`
-	WaitlistDays  int32     `json:"waitlist_days"`
-}
-
-func (q *Queries) UpsertArtistAvailability(ctx context.Context, arg UpsertArtistAvailabilityParams) (ArtistAvailability, error) {
-	row := q.db.QueryRow(ctx, upsertArtistAvailability,
-		arg.ArtistID,
-		arg.AcceptingNew,
-		arg.WeeklyWindows,
-		arg.WaitlistDays,
-	)
-	var i ArtistAvailability
-	err := row.Scan(
-		&i.ArtistID,
-		&i.AcceptingNew,
-		&i.WeeklyWindows,
-		&i.WaitlistDays,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, setArtistOnboardedAt, id)
+	return err
 }

@@ -19,7 +19,7 @@ SET status      = 'archived',
     updated_at  = now()
 WHERE id = $1
   AND status <> 'archived'
-RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
+RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
 `
 
 func (q *Queries) ArchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error) {
@@ -40,7 +40,6 @@ func (q *Queries) ArchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 		&i.FlatPriceCents,
 		&i.FlatDurationMinutes,
 		&i.DepositCents,
-		&i.Currency,
 		&i.Repeatable,
 		&i.ClaimedAt,
 		&i.ClaimedByBookingID,
@@ -62,7 +61,7 @@ SET status                = 'claimed',
     updated_at            = now()
 WHERE id = $2
   AND status = 'available'
-RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
+RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
 `
 
 type ClaimFlashParams struct {
@@ -88,7 +87,6 @@ func (q *Queries) ClaimFlash(ctx context.Context, arg ClaimFlashParams) (Flash, 
 		&i.FlatPriceCents,
 		&i.FlatDurationMinutes,
 		&i.DepositCents,
-		&i.Currency,
 		&i.Repeatable,
 		&i.ClaimedAt,
 		&i.ClaimedByBookingID,
@@ -122,9 +120,6 @@ type CountFlashesByArtistRow struct {
 	Available int64 `json:"available"`
 }
 
-// `total` honours the optional status filter (so it matches the paginated
-// list), while `available` is always the unconditional available count for
-// use as a headline stat.
 func (q *Queries) CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error) {
 	row := q.db.QueryRow(ctx, countFlashesByArtist, arg.Status, arg.ArtistID)
 	var i CountFlashesByArtistRow
@@ -147,7 +142,6 @@ INSERT INTO flashes (
     flat_price_cents,
     flat_duration_minutes,
     deposit_cents,
-    currency,
     repeatable,
     published_at
 )
@@ -166,10 +160,9 @@ VALUES (
     $12::integer,
     $13::bigint,
     $14,
-    $15,
-    $16::timestamptz
+    $15::timestamptz
 )
-RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
+RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
 `
 
 type CreateFlashParams struct {
@@ -186,7 +179,6 @@ type CreateFlashParams struct {
 	FlatPriceCents      *int64             `json:"flat_price_cents"`
 	FlatDurationMinutes *int32             `json:"flat_duration_minutes"`
 	DepositCents        *int64             `json:"deposit_cents"`
-	Currency            string             `json:"currency"`
 	Repeatable          bool               `json:"repeatable"`
 	PublishedAt         pgtype.Timestamptz `json:"published_at"`
 }
@@ -206,7 +198,6 @@ func (q *Queries) CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash
 		arg.FlatPriceCents,
 		arg.FlatDurationMinutes,
 		arg.DepositCents,
-		arg.Currency,
 		arg.Repeatable,
 		arg.PublishedAt,
 	)
@@ -226,7 +217,6 @@ func (q *Queries) CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash
 		&i.FlatPriceCents,
 		&i.FlatDurationMinutes,
 		&i.DepositCents,
-		&i.Currency,
 		&i.Repeatable,
 		&i.ClaimedAt,
 		&i.ClaimedByBookingID,
@@ -274,7 +264,7 @@ func (q *Queries) DeleteFlashPricingTier(ctx context.Context, arg DeleteFlashPri
 }
 
 const getFlash = `-- name: GetFlash :one
-SELECT id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at FROM flashes WHERE id = $1
+SELECT id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at FROM flashes WHERE id = $1
 `
 
 func (q *Queries) GetFlash(ctx context.Context, id uuid.UUID) (Flash, error) {
@@ -295,7 +285,6 @@ func (q *Queries) GetFlash(ctx context.Context, id uuid.UUID) (Flash, error) {
 		&i.FlatPriceCents,
 		&i.FlatDurationMinutes,
 		&i.DepositCents,
-		&i.Currency,
 		&i.Repeatable,
 		&i.ClaimedAt,
 		&i.ClaimedByBookingID,
@@ -321,7 +310,6 @@ func (q *Queries) IncrementFlashViewCount(ctx context.Context, id uuid.UUID) err
 }
 
 const listFlashPricingTiers = `-- name: ListFlashPricingTiers :many
-
 SELECT flash_id, size_code, duration_minutes, price_cents
 FROM flash_pricing_tiers
 WHERE flash_id = $1
@@ -335,7 +323,6 @@ ORDER BY
     END
 `
 
-// Pricing tiers ----------------------------------------------------------
 func (q *Queries) ListFlashPricingTiers(ctx context.Context, flashID uuid.UUID) ([]FlashPricingTier, error) {
 	rows, err := q.db.Query(ctx, listFlashPricingTiers, flashID)
 	if err != nil {
@@ -404,7 +391,7 @@ func (q *Queries) ListFlashPricingTiersForFlashes(ctx context.Context, flashIds 
 }
 
 const listFlashesByArtist = `-- name: ListFlashesByArtist :many
-SELECT id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
+SELECT id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
 FROM flashes
 WHERE artist_id = $1
   AND ($2::text IS NULL OR status = $2)
@@ -414,18 +401,18 @@ OFFSET $3
 `
 
 type ListFlashesByArtistParams struct {
-	ArtistID uuid.UUID `json:"artist_id"`
-	Status   *string   `json:"status"`
-	Off      int32     `json:"off"`
-	Lim      int32     `json:"lim"`
+	ArtistID   uuid.UUID `json:"artist_id"`
+	Status     *string   `json:"status"`
+	PageOffset int32     `json:"page_offset"`
+	PageLimit  int32     `json:"page_limit"`
 }
 
 func (q *Queries) ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error) {
 	rows, err := q.db.Query(ctx, listFlashesByArtist,
 		arg.ArtistID,
 		arg.Status,
-		arg.Off,
-		arg.Lim,
+		arg.PageOffset,
+		arg.PageLimit,
 	)
 	if err != nil {
 		return nil, err
@@ -449,7 +436,6 @@ func (q *Queries) ListFlashesByArtist(ctx context.Context, arg ListFlashesByArti
 			&i.FlatPriceCents,
 			&i.FlatDurationMinutes,
 			&i.DepositCents,
-			&i.Currency,
 			&i.Repeatable,
 			&i.ClaimedAt,
 			&i.ClaimedByBookingID,
@@ -477,7 +463,7 @@ SET status       = 'available',
     updated_at   = now()
 WHERE id = $1
   AND status = 'draft'
-RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
+RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
 `
 
 func (q *Queries) PublishFlash(ctx context.Context, id uuid.UUID) (Flash, error) {
@@ -498,7 +484,6 @@ func (q *Queries) PublishFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 		&i.FlatPriceCents,
 		&i.FlatDurationMinutes,
 		&i.DepositCents,
-		&i.Currency,
 		&i.Repeatable,
 		&i.ClaimedAt,
 		&i.ClaimedByBookingID,
@@ -522,11 +507,9 @@ SET status      = CASE
     updated_at  = now()
 WHERE id = $1
   AND status = 'archived'
-RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
+RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
 `
 
-// Restores a previously published flash to 'available', otherwise back to
-// 'draft', and clears the archived timestamp.
 func (q *Queries) UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error) {
 	row := q.db.QueryRow(ctx, unarchiveFlash, id)
 	var i Flash
@@ -545,7 +528,6 @@ func (q *Queries) UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, erro
 		&i.FlatPriceCents,
 		&i.FlatDurationMinutes,
 		&i.DepositCents,
-		&i.Currency,
 		&i.Repeatable,
 		&i.ClaimedAt,
 		&i.ClaimedByBookingID,
@@ -575,11 +557,10 @@ SET title                 = COALESCE($1::text,                          title),
     flat_price_cents      = COALESCE($10::bigint,             flat_price_cents),
     flat_duration_minutes = COALESCE($11::integer,       flat_duration_minutes),
     deposit_cents         = COALESCE($12::bigint,                deposit_cents),
-    currency              = COALESCE($13::char(3),                    currency),
-    repeatable            = COALESCE($14::boolean,                  repeatable),
+    repeatable            = COALESCE($13::boolean,                  repeatable),
     updated_at            = now()
-WHERE id = $15
-RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, currency, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
+WHERE id = $14
+RETURNING id, artist_id, status, title, description, s3_key, reference_s3_key, color_type, styles, placements, pricing_mode, flat_price_cents, flat_duration_minutes, deposit_cents, repeatable, claimed_at, claimed_by_booking_id, archived_at, published_at, view_count, save_count, created_at, updated_at
 `
 
 type UpdateFlashParams struct {
@@ -595,7 +576,6 @@ type UpdateFlashParams struct {
 	FlatPriceCents      *int64    `json:"flat_price_cents"`
 	FlatDurationMinutes *int32    `json:"flat_duration_minutes"`
 	DepositCents        *int64    `json:"deposit_cents"`
-	Currency            *string   `json:"currency"`
 	Repeatable          *bool     `json:"repeatable"`
 	ID                  uuid.UUID `json:"id"`
 }
@@ -614,7 +594,6 @@ func (q *Queries) UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash
 		arg.FlatPriceCents,
 		arg.FlatDurationMinutes,
 		arg.DepositCents,
-		arg.Currency,
 		arg.Repeatable,
 		arg.ID,
 	)
@@ -634,7 +613,6 @@ func (q *Queries) UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash
 		&i.FlatPriceCents,
 		&i.FlatDurationMinutes,
 		&i.DepositCents,
-		&i.Currency,
 		&i.Repeatable,
 		&i.ClaimedAt,
 		&i.ClaimedByBookingID,

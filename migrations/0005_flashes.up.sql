@@ -22,8 +22,6 @@ CREATE TABLE flashes (
     flat_duration_minutes INTEGER      CHECK (flat_duration_minutes IS NULL OR flat_duration_minutes > 0),
 
     deposit_cents         BIGINT       CHECK (deposit_cents IS NULL OR deposit_cents >= 0),
-    currency              CHAR(3)      NOT NULL DEFAULT 'CAD',
-
     repeatable            BOOLEAN      NOT NULL DEFAULT false,
 
     claimed_at            TIMESTAMPTZ,

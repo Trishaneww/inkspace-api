@@ -24,7 +24,6 @@ func flashFromRow(row sqlc.Flash, tiers []sqlc.FlashPricingTier) Flash {
 		FlatPriceCents:      row.FlatPriceCents,
 		FlatDurationMinutes: row.FlatDurationMinutes,
 		DepositCents:        row.DepositCents,
-		Currency:            row.Currency,
 		Repeatable:          row.Repeatable,
 		ClaimedAt:           timestampPtr(row.ClaimedAt),
 		ClaimedByBookingID:  uuidStringPtr(row.ClaimedByBookingID),

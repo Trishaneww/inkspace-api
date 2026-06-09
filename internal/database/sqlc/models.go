@@ -14,23 +14,80 @@ import (
 type Artist struct {
 	ID          uuid.UUID          `json:"id"`
 	UserID      uuid.UUID          `json:"user_id"`
-	Handle      string             `json:"handle"`
-	DisplayName string             `json:"display_name"`
-	Bio         string             `json:"bio"`
-	Styles      []string           `json:"styles"`
-	City        *string            `json:"city"`
-	Country     *string            `json:"country"`
-	BookingLink *string            `json:"booking_link"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	OnboardedAt pgtype.Timestamptz `json:"onboarded_at"`
 }
 
-type ArtistAvailability struct {
-	ArtistID      uuid.UUID          `json:"artist_id"`
-	AcceptingNew  bool               `json:"accepting_new"`
-	WeeklyWindows []byte             `json:"weekly_windows"`
-	WaitlistDays  int32              `json:"waitlist_days"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+type ArtistAvailabilityWindow struct {
+	ID          uuid.UUID `json:"id"`
+	ArtistID    uuid.UUID `json:"artist_id"`
+	Weekday     int32     `json:"weekday"`
+	StartMinute int32     `json:"start_minute"`
+	EndMinute   int32     `json:"end_minute"`
+}
+
+type ArtistBlocklist struct {
+	ID        uuid.UUID          `json:"id"`
+	ArtistID  uuid.UUID          `json:"artist_id"`
+	Email     *string            `json:"email"`
+	Phone     *string            `json:"phone"`
+	Note      string             `json:"note"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type ArtistDaysOff struct {
+	ArtistID uuid.UUID   `json:"artist_id"`
+	Day      pgtype.Date `json:"day"`
+}
+
+type ArtistSessionPreset struct {
+	ID                    uuid.UUID          `json:"id"`
+	ArtistID              uuid.UUID          `json:"artist_id"`
+	Name                  string             `json:"name"`
+	Description           string             `json:"description"`
+	ApproxDurationMinutes int32              `json:"approx_duration_minutes"`
+	Position              int32              `json:"position"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+}
+
+type ArtistSetting struct {
+	ArtistID                   uuid.UUID          `json:"artist_id"`
+	StudioName                 string             `json:"studio_name"`
+	StudioAddress              string             `json:"studio_address"`
+	StudioCity                 string             `json:"studio_city"`
+	StudioProvince             string             `json:"studio_province"`
+	StudioPostalCode           string             `json:"studio_postal_code"`
+	StudioCountry              string             `json:"studio_country"`
+	StripeAccountID            *string            `json:"stripe_account_id"`
+	PayoutFrequency            string             `json:"payout_frequency"`
+	Currency                   string             `json:"currency"`
+	DepositFlatFeeCents        *int64             `json:"deposit_flat_fee_cents"`
+	PlatformFeePayer           string             `json:"platform_fee_payer"`
+	AcceptingBookings          bool               `json:"accepting_bookings"`
+	Timezone                   string             `json:"timezone"`
+	GoogleCalendarEmail        *string            `json:"google_calendar_email"`
+	SlotIntervalMinutes        int32              `json:"slot_interval_minutes"`
+	BufferMinutes              int32              `json:"buffer_minutes"`
+	MinNoticeMinutes           int32              `json:"min_notice_minutes"`
+	MaxAdvanceDays             *int32             `json:"max_advance_days"`
+	TermsText                  string             `json:"terms_text"`
+	TermsShowOnBooking         bool               `json:"terms_show_on_booking"`
+	TermsShowAtDeposit         bool               `json:"terms_show_at_deposit"`
+	WaiverFileUrl              *string            `json:"waiver_file_url"`
+	WaiverRequired             bool               `json:"waiver_required"`
+	NotifyByEmail              bool               `json:"notify_by_email"`
+	NotifyBySms                bool               `json:"notify_by_sms"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	GoogleCalendarAccessToken  *string            `json:"google_calendar_access_token"`
+	GoogleCalendarRefreshToken *string            `json:"google_calendar_refresh_token"`
+	GoogleCalendarTokenExpiry  pgtype.Timestamptz `json:"google_calendar_token_expiry"`
+	StripeChargesEnabled       bool               `json:"stripe_charges_enabled"`
+	StripePayoutsEnabled       bool               `json:"stripe_payouts_enabled"`
+	StripeDetailsSubmitted     bool               `json:"stripe_details_submitted"`
+	DepositRefundPolicy        string             `json:"deposit_refund_policy"`
+	CancellationNoticeHours    *int32             `json:"cancellation_notice_hours"`
 }
 
 type Flash struct {
@@ -48,7 +105,6 @@ type Flash struct {
 	FlatPriceCents      *int64             `json:"flat_price_cents"`
 	FlatDurationMinutes *int32             `json:"flat_duration_minutes"`
 	DepositCents        *int64             `json:"deposit_cents"`
-	Currency            string             `json:"currency"`
 	Repeatable          bool               `json:"repeatable"`
 	ClaimedAt           pgtype.Timestamptz `json:"claimed_at"`
 	ClaimedByBookingID  pgtype.UUID        `json:"claimed_by_booking_id"`
@@ -65,6 +121,15 @@ type FlashPricingTier struct {
 	SizeCode        string    `json:"size_code"`
 	DurationMinutes int32     `json:"duration_minutes"`
 	PriceCents      int64     `json:"price_cents"`
+}
+
+type OpenBook struct {
+	ID             uuid.UUID          `json:"id"`
+	ArtistID       uuid.UUID          `json:"artist_id"`
+	Slug           string             `json:"slug"`
+	SchedulingMode string             `json:"scheduling_mode"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type PhoneVerification struct {
@@ -101,4 +166,7 @@ type User struct {
 	LastName        *string            `json:"last_name"`
 	Phone           *string            `json:"phone"`
 	PhoneVerifiedAt pgtype.Timestamptz `json:"phone_verified_at"`
+	Username        *string            `json:"username"`
+	AvatarUrl       *string            `json:"avatar_url"`
+	InstagramUrl    *string            `json:"instagram_url"`
 }

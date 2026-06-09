@@ -53,6 +53,8 @@ type Flash struct {
 	FlatPriceCents      *int64        `json:"flat_price_cents,omitempty"`
 	FlatDurationMinutes *int32        `json:"flat_duration_minutes,omitempty"`
 	DepositCents        *int64        `json:"deposit_cents,omitempty"`
+	// Currency is derived from the artist's settings (artist_settings.currency),
+	// not stored per-flash. Included here so price formatting has a unit.
 	Currency            string        `json:"currency"`
 	Repeatable          bool          `json:"repeatable"`
 	ClaimedAt           *time.Time    `json:"claimed_at,omitempty"`
@@ -108,7 +110,6 @@ type CreateFlashInput struct {
 	FlatPriceCents      *int64        `json:"flat_price_cents,omitempty"`
 	FlatDurationMinutes *int32        `json:"flat_duration_minutes,omitempty"`
 	DepositCents        *int64        `json:"deposit_cents,omitempty"`
-	Currency            string        `json:"currency" binding:"required,len=3"`
 	Repeatable          bool          `json:"repeatable"`
 	PricingTiers        []PricingTier `json:"pricing_tiers,omitempty"`
 	Publish             bool          `json:"publish"` // true = create as 'available', false = 'draft'
@@ -128,7 +129,6 @@ type UpdateFlashInput struct {
 	FlatPriceCents      *int64         `json:"flat_price_cents,omitempty"`
 	FlatDurationMinutes *int32         `json:"flat_duration_minutes,omitempty"`
 	DepositCents        *int64         `json:"deposit_cents,omitempty"`
-	Currency            *string        `json:"currency,omitempty"`
 	Repeatable          *bool          `json:"repeatable,omitempty"`
 	PricingTiers        *[]PricingTier `json:"pricing_tiers,omitempty"`
 }

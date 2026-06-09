@@ -31,6 +31,10 @@ type Repository interface {
 	// Cross-table lookup: JWT carries user_id, but flashes belong to an
 	// artist_id. The 1:1 mapping lives in the artists table.
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error)
+	EnsureArtist(ctx context.Context, userID uuid.UUID) error
+
+	// Currency is an artist-level setting; a flash inherits it at read time.
+	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
 
 	// RunInTx runs `fn` inside a transaction, handing it a Repository
 	// bound to the transaction. Used when create/update must touch both
@@ -110,6 +114,14 @@ func (r *repository) DeleteAllPricingTiers(ctx context.Context, flashID uuid.UUI
 
 func (r *repository) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error) {
 	return r.q.GetArtistByUserID(ctx, userID)
+}
+
+func (r *repository) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
+	return r.q.EnsureArtist(ctx, userID)
+}
+
+func (r *repository) GetArtistSettings(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error) {
+	return r.q.GetArtistSettings(ctx, artistID)
 }
 
 func (r *repository) RunInTx(ctx context.Context, fn func(Repository) error) error {
