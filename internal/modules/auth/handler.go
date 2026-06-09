@@ -166,6 +166,10 @@ func writeServiceError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusBadRequest, "invalid_verification_code", err.Error())
 	case errors.Is(err, ErrTooManyVerificationAttempts):
 		httpx.Error(c, http.StatusTooManyRequests, "too_many_verification_attempts", err.Error())
+	case errors.Is(err, ErrTooManyLoginAttempts):
+		httpx.Error(c, http.StatusTooManyRequests, "too_many_login_attempts", err.Error())
+	case errors.Is(err, ErrTooManyOTPRequests):
+		httpx.Error(c, http.StatusTooManyRequests, "too_many_otp_requests", err.Error())
 	case errors.Is(err, ErrProviderNotConfigured):
 		httpx.Error(c, http.StatusNotImplemented, "oauth_not_configured", err.Error())
 	case errors.Is(err, ErrProviderNotImplemented):
