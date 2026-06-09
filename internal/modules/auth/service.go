@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"math/big"
 	"os"
 	"strings"
@@ -23,6 +24,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
+	"github.com/trishaneupnexx/inkspace-api/internal/ratelimit"
 )
 
 var (
@@ -32,6 +34,8 @@ var (
 	ErrPhoneVerificationNotFound   = errors.New("phone verification not found or expired")
 	ErrInvalidVerificationCode     = errors.New("invalid verification code")
 	ErrTooManyVerificationAttempts = errors.New("too many verification attempts")
+	ErrTooManyLoginAttempts        = errors.New("too many failed login attempts; try again later")
+	ErrTooManyOTPRequests          = errors.New("too many verification codes requested; try again later")
 	ErrProviderNotConfigured       = errors.New("oauth provider not configured")
 	ErrProviderNotImplemented      = errors.New("oauth provider integration not implemented")
 	ErrInvalidRefreshToken         = errors.New("invalid or expired refresh token")
@@ -55,10 +59,27 @@ type service struct {
 	cfg    *config.Config
 	repo   Repository
 	events *events.Publisher
+
+	loginLockout *ratelimit.Lockout
+	otpLimiter   ratelimit.Limiter
+	log          *slog.Logger
 }
 
-func NewService(cfg *config.Config, repo Repository, pub *events.Publisher) Service {
-	return &service{cfg: cfg, repo: repo, events: pub}
+func NewService(
+	cfg *config.Config,
+	repo Repository,
+	pub *events.Publisher,
+	loginLockout *ratelimit.Lockout,
+	otpLimiter ratelimit.Limiter,
+) Service {
+	return &service{
+		cfg:          cfg,
+		repo:         repo,
+		events:       pub,
+		loginLockout: loginLockout,
+		otpLimiter:   otpLimiter,
+		log:          slog.Default(),
+	}
 }
 
 func (s *service) Register(
@@ -77,9 +98,6 @@ func (s *service) Register(
 	phone := strings.TrimSpace(in.Phone)
 	var username, instagram *string
 
-	// Look up any existing row by email. An in-progress (unverified)
-	// signup is allowed to re-submit to correct typos; a verified user
-	// must use the login flow.
 	existing, err := s.repo.GetUserByEmail(ctx, email)
 	emailExists := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -89,9 +107,6 @@ func (s *service) Register(
 		return nil, ErrEmailTaken
 	}
 
-	// Reject phone reuse by ANY user other than the in-progress signup
-	// we're about to update. (Verified users own their phone; unverified
-	// users have soft-reserved it.)
 	phoneOwner, err := s.repo.GetUserByPhone(ctx, &phone)
 	switch {
 	case err == nil:
@@ -99,7 +114,6 @@ func (s *service) Register(
 			return nil, ErrPhoneTaken
 		}
 	case errors.Is(err, pgx.ErrNoRows):
-		// phone is free
 	default:
 		return nil, err
 	}
@@ -114,13 +128,13 @@ func (s *service) Register(
 				LastName:     &lastName,
 				Phone:        &phone,
 				Username:     username,
-				InstagramUrl: instagram,
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
-		return s.issuePhoneVerification(ctx, updated)
+			InstagramURL: instagram,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.issuePhoneVerification(ctx, updated)
 	}
 
 	user, err := s.repo.CreateUser(ctx, sqlc.CreateUserParams{
@@ -131,7 +145,7 @@ func (s *service) Register(
 		LastName:     &lastName,
 		Phone:        &phone,
 		Username:     username,
-		InstagramUrl: instagram,
+		InstagramURL: instagram,
 	})
 	if err != nil {
 		return nil, err
@@ -141,19 +155,19 @@ func (s *service) Register(
 }
 
 // ── Login ────────────────────────────────────────────────────────
-//
-// Returns either *AuthenticatedResponse OR *PhoneVerificationRequiredResponse
-// depending on whether the user has already verified their phone.
-//
-// (The mixed return is wrapped as interface{} so the handler can JSON-encode
-// whichever payload comes back; the discriminator is the `status` field.)
-
 func (s *service) Login(ctx context.Context, in LoginInput) (interface{}, error) {
 	email := strings.ToLower(strings.TrimSpace(in.Email))
+
+	if locked, err := s.isLoginLocked(ctx, email); err != nil {
+		s.log.Warn("login_lockout_check_failed", "error", err) // fail open
+	} else if locked {
+		return nil, ErrTooManyLoginAttempts
+	}
 
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			s.recordLoginFailure(ctx, email)
 			return nil, ErrInvalidCredentials
 		}
 		return nil, err
@@ -162,20 +176,65 @@ func (s *service) Login(ctx context.Context, in LoginInput) (interface{}, error)
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.PasswordHash), []byte(in.Password),
 	); err != nil {
+		s.recordLoginFailure(ctx, email)
 		return nil, ErrInvalidCredentials
 	}
 
-	// Always require phone verification on email login (per product spec).
+	s.resetLoginFailures(ctx, email)
+
 	return s.issuePhoneVerification(ctx, user)
 }
 
-// ── Phone verification issuance ──────────────────────────────────
+func loginFailKey(email string) string { return "auth:login_fail:" + email }
+func otpSendKey(phone string) string   { return "auth:otp_send:" + phone }
 
+func (s *service) isLoginLocked(ctx context.Context, email string) (bool, error) {
+	if s.loginLockout == nil {
+		return false, nil
+	}
+	return s.loginLockout.Locked(ctx, loginFailKey(email))
+}
+
+func (s *service) recordLoginFailure(ctx context.Context, email string) {
+	if s.loginLockout == nil {
+		return
+	}
+	if _, err := s.loginLockout.RecordFailure(ctx, loginFailKey(email)); err != nil {
+		s.log.Warn("login_lockout_record_failed", "error", err)
+	}
+}
+
+func (s *service) resetLoginFailures(ctx context.Context, email string) {
+	if s.loginLockout == nil {
+		return
+	}
+	if err := s.loginLockout.Reset(ctx, loginFailKey(email)); err != nil {
+		s.log.Warn("login_lockout_reset_failed", "error", err)
+	}
+}
+
+func (s *service) otpSendAllowed(ctx context.Context, phone string) bool {
+	if s.otpLimiter == nil {
+		return true
+	}
+	res, err := s.otpLimiter.Allow(ctx, otpSendKey(phone))
+	if err != nil {
+		s.log.Warn("otp_send_limit_check_failed", "error", err)
+		return true // fail open
+	}
+	return res.Allowed
+}
+
+// ── Phone verification ──────────────────────────────────
 func (s *service) issuePhoneVerification(
 	ctx context.Context, user sqlc.User,
 ) (*PhoneVerificationRequiredResponse, error) {
 	if user.Phone == nil || *user.Phone == "" {
 		return nil, errors.New("user has no phone on file")
+	}
+
+	if !s.otpSendAllowed(ctx, *user.Phone) {
+		return nil, ErrTooManyOTPRequests
 	}
 
 	if err := s.repo.RevokeActivePhoneVerificationsForUser(ctx, user.ID); err != nil {
@@ -270,8 +329,6 @@ func (s *service) VerifyPhone(
 		return nil, err
 	}
 
-	// Provision the artist profile now that the account is active. Idempotent,
-	// and mirrored by a lazy ensure on the artist endpoints as a safety net.
 	if Role(user.Role) == RoleArtist {
 		if err := s.repo.EnsureArtist(ctx, user.ID); err != nil {
 			return nil, err
@@ -309,6 +366,10 @@ func (s *service) ResendPhoneCode(
 			return ErrPhoneVerificationNotFound
 		}
 		return err
+	}
+
+	if !s.otpSendAllowed(ctx, verification.Phone) {
+		return ErrTooManyOTPRequests
 	}
 
 	code, err := generateNumericCode(s.cfg.PhoneCodeLength)
@@ -376,7 +437,6 @@ func (s *service) OAuthCallback(
 	user, err := s.repo.GetUserByEmail(ctx, claims.Email)
 	switch {
 	case err == nil:
-		// Existing fully-provisioned user — log them in directly.
 		pair, err := s.issueTokenPair(ctx, user)
 		if err != nil {
 			return nil, err
@@ -447,7 +507,6 @@ func (s *service) CompleteOAuthSignup(
 			return nil, ErrPhoneTaken
 		}
 	case errors.Is(err, pgx.ErrNoRows):
-		// free
 	default:
 		return nil, err
 	}
@@ -461,14 +520,14 @@ func (s *service) CompleteOAuthSignup(
 				FirstName:    &firstName,
 				LastName:     &lastName,
 				Phone:        &phone,
-				Username:     username,
-				InstagramUrl: instagram,
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
-		return s.issuePhoneVerification(ctx, updated)
+			Username:     username,
+			InstagramURL: instagram,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.issuePhoneVerification(ctx, updated)
 	}
 
 	user, err := s.repo.CreateUser(ctx, sqlc.CreateUserParams{
@@ -479,7 +538,7 @@ func (s *service) CompleteOAuthSignup(
 		LastName:     &lastName,
 		Phone:        &phone,
 		Username:     username,
-		InstagramUrl: instagram,
+		InstagramURL: instagram,
 	})
 	if err != nil {
 		return nil, err
@@ -487,7 +546,6 @@ func (s *service) CompleteOAuthSignup(
 	return s.issuePhoneVerification(ctx, user)
 }
 
-// ── Current user / Logout ────────────────────────────────────────
 func (s *service) buildUserResponse(ctx context.Context, user sqlc.User) (User, error) {
 	u := userFromRecord(user)
 	if Role(user.Role) != RoleArtist {
@@ -502,7 +560,6 @@ func (s *service) buildUserResponse(ctx context.Context, user sqlc.User) (User, 
 			u.OnboardedAt = &ts
 		}
 	case errors.Is(err, pgx.ErrNoRows):
-		// No artist row yet → treat as not onboarded.
 	default:
 		return User{}, err
 	}

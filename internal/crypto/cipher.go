@@ -10,7 +10,6 @@ import (
 	"io"
 )
 
-
 const keyLength = 32
 
 type Cipher struct {
@@ -49,17 +48,17 @@ func (c *Cipher) Encrypt(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(sealed), nil
 }
 
-func (c *Cipher) Decrypt(encoded string) (string, error) {
-	sealed, err := base64.StdEncoding.DecodeString(encoded)
+func (c *Cipher) Decrypt(ciphertext string) (string, error) {
+	decodedBytes, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", fmt.Errorf("decode ciphertext: %w", err)
 	}
 	nonceSize := c.aead.NonceSize()
-	if len(sealed) < nonceSize {
+	if len(decodedBytes) < nonceSize {
 		return "", errors.New("ciphertext shorter than nonce")
 	}
-	nonce, body := sealed[:nonceSize], sealed[nonceSize:]
-	plaintext, err := c.aead.Open(nil, nonce, body, nil)
+	nonce, ciphertextBytes := decodedBytes[:nonceSize], decodedBytes[nonceSize:]
+	plaintext, err := c.aead.Open(nil, nonce, ciphertextBytes, nil)
 	if err != nil {
 		return "", fmt.Errorf("decrypt: %w", err)
 	}

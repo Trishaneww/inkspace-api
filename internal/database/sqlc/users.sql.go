@@ -24,7 +24,7 @@ type CreateRefreshTokenParams struct {
 	TokenHash string             `json:"token_hash"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	UserAgent *string            `json:"user_agent"`
-	IpAddress *netip.Addr        `json:"ip_address"`
+	IPAddress *netip.Addr        `json:"ip_address"`
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error) {
@@ -33,7 +33,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		arg.TokenHash,
 		arg.ExpiresAt,
 		arg.UserAgent,
-		arg.IpAddress,
+		arg.IPAddress,
 	)
 	var i RefreshToken
 	err := row.Scan(
@@ -43,7 +43,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.UserAgent,
-		&i.IpAddress,
+		&i.IPAddress,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -63,7 +63,7 @@ type CreateUserParams struct {
 	LastName     *string `json:"last_name"`
 	Phone        *string `json:"phone"`
 	Username     *string `json:"username"`
-	InstagramUrl *string `json:"instagram_url"`
+	InstagramURL *string `json:"instagram_url"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -75,7 +75,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.LastName,
 		arg.Phone,
 		arg.Username,
-		arg.InstagramUrl,
+		arg.InstagramURL,
 	)
 	var i User
 	err := row.Scan(
@@ -91,8 +91,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }
@@ -136,7 +136,7 @@ func (q *Queries) GetActiveRefreshTokenByHash(ctx context.Context, tokenHash str
 		&i.ExpiresAt,
 		&i.RevokedAt,
 		&i.UserAgent,
-		&i.IpAddress,
+		&i.IPAddress,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -162,8 +162,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }
@@ -188,8 +188,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }
@@ -214,8 +214,8 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, erro
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }
@@ -288,7 +288,7 @@ type UpdateUnverifiedUserParams struct {
 	LastName     *string   `json:"last_name"`
 	Phone        *string   `json:"phone"`
 	Username     *string   `json:"username"`
-	InstagramUrl *string   `json:"instagram_url"`
+	InstagramURL *string   `json:"instagram_url"`
 }
 
 func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error) {
@@ -300,7 +300,7 @@ func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverified
 		arg.LastName,
 		arg.Phone,
 		arg.Username,
-		arg.InstagramUrl,
+		arg.InstagramURL,
 	)
 	var i User
 	err := row.Scan(
@@ -316,8 +316,8 @@ func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverified
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }

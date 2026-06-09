@@ -97,10 +97,10 @@ func (q *Queries) ClearGoogleCalendarConnection(ctx context.Context, artistID uu
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -153,10 +153,10 @@ func (q *Queries) ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (A
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -168,6 +168,37 @@ func (q *Queries) ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (A
 		&i.DepositRefundPolicy,
 		&i.CancellationNoticeHours,
 		&i.Styles,
+	)
+	return i, err
+}
+
+const createAvailabilityWindow = `-- name: CreateAvailabilityWindow :one
+INSERT INTO artist_availability_windows (artist_id, weekday, start_minute, end_minute)
+VALUES ($1, $2, $3, $4)
+RETURNING id, artist_id, weekday, start_minute, end_minute
+`
+
+type CreateAvailabilityWindowParams struct {
+	ArtistID    uuid.UUID `json:"artist_id"`
+	Weekday     int32     `json:"weekday"`
+	StartMinute int32     `json:"start_minute"`
+	EndMinute   int32     `json:"end_minute"`
+}
+
+func (q *Queries) CreateAvailabilityWindow(ctx context.Context, arg CreateAvailabilityWindowParams) (ArtistAvailabilityWindow, error) {
+	row := q.db.QueryRow(ctx, createAvailabilityWindow,
+		arg.ArtistID,
+		arg.Weekday,
+		arg.StartMinute,
+		arg.EndMinute,
+	)
+	var i ArtistAvailabilityWindow
+	err := row.Scan(
+		&i.ID,
+		&i.ArtistID,
+		&i.Weekday,
+		&i.StartMinute,
+		&i.EndMinute,
 	)
 	return i, err
 }
@@ -207,12 +238,12 @@ func (q *Queries) CreateSessionPreset(ctx context.Context, arg CreateSessionPres
 	return i, err
 }
 
-const deleteAvailabilityWindows = `-- name: DeleteAvailabilityWindows :exec
+const deleteAllAvailabilityWindows = `-- name: DeleteAllAvailabilityWindows :exec
 DELETE FROM artist_availability_windows WHERE artist_id = $1
 `
 
-func (q *Queries) DeleteAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAvailabilityWindows, artistID)
+func (q *Queries) DeleteAllAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAllAvailabilityWindows, artistID)
 	return err
 }
 
@@ -272,10 +303,10 @@ func (q *Queries) GetArtistSettings(ctx context.Context, artistID uuid.UUID) (Ar
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -321,10 +352,10 @@ func (q *Queries) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAc
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -360,39 +391,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username *string) (User
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
-	)
-	return i, err
-}
-
-const insertAvailabilityWindow = `-- name: InsertAvailabilityWindow :one
-INSERT INTO artist_availability_windows (artist_id, weekday, start_minute, end_minute)
-VALUES ($1, $2, $3, $4)
-RETURNING id, artist_id, weekday, start_minute, end_minute
-`
-
-type InsertAvailabilityWindowParams struct {
-	ArtistID    uuid.UUID `json:"artist_id"`
-	Weekday     int32     `json:"weekday"`
-	StartMinute int32     `json:"start_minute"`
-	EndMinute   int32     `json:"end_minute"`
-}
-
-func (q *Queries) InsertAvailabilityWindow(ctx context.Context, arg InsertAvailabilityWindowParams) (ArtistAvailabilityWindow, error) {
-	row := q.db.QueryRow(ctx, insertAvailabilityWindow,
-		arg.ArtistID,
-		arg.Weekday,
-		arg.StartMinute,
-		arg.EndMinute,
-	)
-	var i ArtistAvailabilityWindow
-	err := row.Scan(
-		&i.ID,
-		&i.ArtistID,
-		&i.Weekday,
-		&i.StartMinute,
-		&i.EndMinute,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }
@@ -607,10 +607,10 @@ func (q *Queries) SetGoogleCalendarConnection(ctx context.Context, arg SetGoogle
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -668,10 +668,10 @@ func (q *Queries) SetStripeAccount(ctx context.Context, arg SetStripeAccountPara
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -743,41 +743,41 @@ RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, 
 `
 
 type UpdateArtistSettingsParams struct {
-	StudioName              *string   `json:"studio_name"`
-	StudioAddress           *string   `json:"studio_address"`
-	StudioCity              *string   `json:"studio_city"`
-	StudioProvince          *string   `json:"studio_province"`
-	StudioPostalCode        *string   `json:"studio_postal_code"`
-	StudioCountry           *string   `json:"studio_country"`
-	PayoutFrequency         *string   `json:"payout_frequency"`
-	Currency                *string   `json:"currency"`
-	PlatformFeePayer        *string   `json:"platform_fee_payer"`
-	AcceptingBookings       *bool     `json:"accepting_bookings"`
-	Timezone                *string   `json:"timezone"`
-	SlotIntervalMinutes     *int32    `json:"slot_interval_minutes"`
-	BufferMinutes           *int32    `json:"buffer_minutes"`
-	MinNoticeMinutes        *int32    `json:"min_notice_minutes"`
-	TermsText               *string   `json:"terms_text"`
-	TermsShowOnBooking      *bool     `json:"terms_show_on_booking"`
-	TermsShowAtDeposit      *bool     `json:"terms_show_at_deposit"`
-	WaiverRequired          *bool     `json:"waiver_required"`
-	NotifyByEmail           *bool     `json:"notify_by_email"`
-	NotifyBySms             *bool     `json:"notify_by_sms"`
-	DepositRefundPolicy     *string   `json:"deposit_refund_policy"`
-	Styles                  []string  `json:"styles"`
-	ClearDepositFlatFee     bool      `json:"clear_deposit_flat_fee"`
-	DepositFlatFeeCents     *int64    `json:"deposit_flat_fee_cents"`
-	ClearMaxAdvance         bool      `json:"clear_max_advance"`
-	MaxAdvanceDays          *int32    `json:"max_advance_days"`
-	ClearCancellationNotice bool      `json:"clear_cancellation_notice"`
-	CancellationNoticeHours *int32    `json:"cancellation_notice_hours"`
-	ClearStripeAccount      bool      `json:"clear_stripe_account"`
-	StripeAccountID         *string   `json:"stripe_account_id"`
-	ClearGoogleCalendar     bool      `json:"clear_google_calendar"`
-	GoogleCalendarEmail     *string   `json:"google_calendar_email"`
-	ClearWaiverFile         bool      `json:"clear_waiver_file"`
-	WaiverFileUrl           *string   `json:"waiver_file_url"`
-	ArtistID                uuid.UUID `json:"artist_id"`
+	StudioName                   *string   `json:"studio_name"`
+	StudioAddress                *string   `json:"studio_address"`
+	StudioCity                   *string   `json:"studio_city"`
+	StudioProvince               *string   `json:"studio_province"`
+	StudioPostalCode             *string   `json:"studio_postal_code"`
+	StudioCountry                *string   `json:"studio_country"`
+	PayoutFrequency              *string   `json:"payout_frequency"`
+	Currency                     *string   `json:"currency"`
+	PlatformFeePayer             *string   `json:"platform_fee_payer"`
+	AcceptingBookings            *bool     `json:"accepting_bookings"`
+	Timezone                     *string   `json:"timezone"`
+	SlotIntervalMinutes          *int32    `json:"slot_interval_minutes"`
+	BufferMinutes                *int32    `json:"buffer_minutes"`
+	MinNoticeMinutes             *int32    `json:"min_notice_minutes"`
+	TermsText                    *string   `json:"terms_text"`
+	TermsShowOnBooking           *bool     `json:"terms_show_on_booking"`
+	TermsShowAtDeposit           *bool     `json:"terms_show_at_deposit"`
+	WaiverRequired               *bool     `json:"waiver_required"`
+	NotifyByEmail                *bool     `json:"notify_by_email"`
+	NotifyBySMS                  *bool     `json:"notify_by_sms"`
+	DepositRefundPolicy          *string   `json:"deposit_refund_policy"`
+	Styles                       []string  `json:"styles"`
+	ClearDepositFlatFee          bool      `json:"clear_deposit_flat_fee"`
+	DepositFlatFeeCents          *int64    `json:"deposit_flat_fee_cents"`
+	ClearMaxAdvanceDays          bool      `json:"clear_max_advance_days"`
+	MaxAdvanceDays               *int32    `json:"max_advance_days"`
+	ClearCancellationNoticeHours bool      `json:"clear_cancellation_notice_hours"`
+	CancellationNoticeHours      *int32    `json:"cancellation_notice_hours"`
+	ClearStripeAccount           bool      `json:"clear_stripe_account"`
+	StripeAccountID              *string   `json:"stripe_account_id"`
+	ClearGoogleCalendar          bool      `json:"clear_google_calendar"`
+	GoogleCalendarEmail          *string   `json:"google_calendar_email"`
+	ClearWaiverFile              bool      `json:"clear_waiver_file"`
+	WaiverFileURL                *string   `json:"waiver_file_url"`
+	ArtistID                     uuid.UUID `json:"artist_id"`
 }
 
 func (q *Queries) UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error) {
@@ -801,21 +801,21 @@ func (q *Queries) UpdateArtistSettings(ctx context.Context, arg UpdateArtistSett
 		arg.TermsShowAtDeposit,
 		arg.WaiverRequired,
 		arg.NotifyByEmail,
-		arg.NotifyBySms,
+		arg.NotifyBySMS,
 		arg.DepositRefundPolicy,
 		arg.Styles,
 		arg.ClearDepositFlatFee,
 		arg.DepositFlatFeeCents,
-		arg.ClearMaxAdvance,
+		arg.ClearMaxAdvanceDays,
 		arg.MaxAdvanceDays,
-		arg.ClearCancellationNotice,
+		arg.ClearCancellationNoticeHours,
 		arg.CancellationNoticeHours,
 		arg.ClearStripeAccount,
 		arg.StripeAccountID,
 		arg.ClearGoogleCalendar,
 		arg.GoogleCalendarEmail,
 		arg.ClearWaiverFile,
-		arg.WaiverFileUrl,
+		arg.WaiverFileURL,
 		arg.ArtistID,
 	)
 	var i ArtistSetting
@@ -842,10 +842,10 @@ func (q *Queries) UpdateArtistSettings(ctx context.Context, arg UpdateArtistSett
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -950,10 +950,10 @@ func (q *Queries) UpdateStripeAccountStatus(ctx context.Context, arg UpdateStrip
 		&i.TermsText,
 		&i.TermsShowOnBooking,
 		&i.TermsShowAtDeposit,
-		&i.WaiverFileUrl,
+		&i.WaiverFileURL,
 		&i.WaiverRequired,
 		&i.NotifyByEmail,
-		&i.NotifyBySms,
+		&i.NotifyBySMS,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarAccessToken,
@@ -998,8 +998,8 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }
@@ -1022,8 +1022,8 @@ type UpdateUserProfileParams struct {
 	LastName     *string   `json:"last_name"`
 	Username     *string   `json:"username"`
 	Phone        *string   `json:"phone"`
-	AvatarUrl    *string   `json:"avatar_url"`
-	InstagramUrl *string   `json:"instagram_url"`
+	AvatarURL    *string   `json:"avatar_url"`
+	InstagramURL *string   `json:"instagram_url"`
 	ID           uuid.UUID `json:"id"`
 }
 
@@ -1033,8 +1033,8 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		arg.LastName,
 		arg.Username,
 		arg.Phone,
-		arg.AvatarUrl,
-		arg.InstagramUrl,
+		arg.AvatarURL,
+		arg.InstagramURL,
 		arg.ID,
 	)
 	var i User
@@ -1051,8 +1051,8 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.Phone,
 		&i.PhoneVerifiedAt,
 		&i.Username,
-		&i.AvatarUrl,
-		&i.InstagramUrl,
+		&i.AvatarURL,
+		&i.InstagramURL,
 	)
 	return i, err
 }

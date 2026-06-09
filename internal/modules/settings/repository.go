@@ -27,8 +27,10 @@ type Repository interface {
 	// Open Book (public booking link)
 	CreateOpenBook(ctx context.Context, params sqlc.CreateOpenBookParams) (sqlc.OpenBook, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (sqlc.OpenBook, error)
+	GetOpenBookBySlug(ctx context.Context, slug string) (sqlc.OpenBook, error)
+	UpdateOpenBook(ctx context.Context, params sqlc.UpdateOpenBookParams) (sqlc.OpenBook, error)
 
-	// Artist settings (scalar config)
+	// Artist settings
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
 	UpdateArtistSettings(ctx context.Context, params sqlc.UpdateArtistSettingsParams) (sqlc.ArtistSetting, error)
@@ -45,8 +47,8 @@ type Repository interface {
 
 	// Availability windows
 	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistAvailabilityWindow, error)
-	DeleteAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error
-	InsertAvailabilityWindow(ctx context.Context, params sqlc.InsertAvailabilityWindowParams) (sqlc.ArtistAvailabilityWindow, error)
+	DeleteAllAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error
+	CreateAvailabilityWindow(ctx context.Context, params sqlc.CreateAvailabilityWindowParams) (sqlc.ArtistAvailabilityWindow, error)
 
 	// Session presets
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistSessionPreset, error)
@@ -126,6 +128,14 @@ func (r *repository) GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID
 	return r.q.GetOpenBookByArtist(ctx, artistID)
 }
 
+func (r *repository) GetOpenBookBySlug(ctx context.Context, slug string) (sqlc.OpenBook, error) {
+	return r.q.GetOpenBookBySlug(ctx, slug)
+}
+
+func (r *repository) UpdateOpenBook(ctx context.Context, params sqlc.UpdateOpenBookParams) (sqlc.OpenBook, error) {
+	return r.q.UpdateOpenBook(ctx, params)
+}
+
 func (r *repository) EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error {
 	return r.q.EnsureArtistSettings(ctx, artistID)
 }
@@ -166,12 +176,12 @@ func (r *repository) ListAvailabilityWindows(ctx context.Context, artistID uuid.
 	return r.q.ListAvailabilityWindows(ctx, artistID)
 }
 
-func (r *repository) DeleteAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error {
-	return r.q.DeleteAvailabilityWindows(ctx, artistID)
+func (r *repository) DeleteAllAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error {
+	return r.q.DeleteAllAvailabilityWindows(ctx, artistID)
 }
 
-func (r *repository) InsertAvailabilityWindow(ctx context.Context, params sqlc.InsertAvailabilityWindowParams) (sqlc.ArtistAvailabilityWindow, error) {
-	return r.q.InsertAvailabilityWindow(ctx, params)
+func (r *repository) CreateAvailabilityWindow(ctx context.Context, params sqlc.CreateAvailabilityWindowParams) (sqlc.ArtistAvailabilityWindow, error) {
+	return r.q.CreateAvailabilityWindow(ctx, params)
 }
 
 func (r *repository) ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistSessionPreset, error) {

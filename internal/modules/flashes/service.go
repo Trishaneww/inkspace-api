@@ -164,8 +164,6 @@ func (s *service) Get(ctx context.Context, flashID uuid.UUID) (Flash, error) {
 		return Flash{}, fmt.Errorf("list pricing tiers: %w", err)
 	}
 
-	// Bump view count in the background — never block the read on it,
-	// and never fail the request if the counter update errors.
 	go func() {
 		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -178,7 +176,6 @@ func (s *service) Get(ctx context.Context, flashID uuid.UUID) (Flash, error) {
 }
 
 func (s *service) ListByArtist(ctx context.Context, artistID uuid.UUID, filter ListFilter) (FlashListResult, error) {
-	// Public callers never see drafts.
 	if filter.Status == nil {
 		availableStatus := FlashStatusAvailable
 		filter.Status = &availableStatus
@@ -274,9 +271,6 @@ func (s *service) Update(ctx context.Context, userID, flashID uuid.UUID, input U
 		return Flash{}, err
 	}
 
-	// The row no longer points at the old reference image, so drop the
-	// bytes. Best-effort — the column is already cleared, an orphaned
-	// object is harmless.
 	if input.ClearReferenceImage && existing.ReferenceS3Key != nil && *existing.ReferenceS3Key != "" {
 		if err := s.s3.Delete(ctx, *existing.ReferenceS3Key); err != nil {
 			s.log.Warn("flash_reference_image_delete_failed", "flash_id", flashID, "key", *existing.ReferenceS3Key, "error", err)
@@ -412,10 +406,10 @@ func (s *service) listFlashes(ctx context.Context, artistID uuid.UUID, filter Li
 	}
 
 	rows, err := s.repo.ListByArtist(ctx, sqlc.ListFlashesByArtistParams{
-		ArtistID: artistID,
-		Status:   statusFilter,
-		Lim:      limit,
-		Off:      offset,
+		ArtistID:   artistID,
+		Status:     statusFilter,
+		PageLimit:  limit,
+		PageOffset: offset,
 	})
 	if err != nil {
 		return FlashListResult{}, err
@@ -460,10 +454,6 @@ func (s *service) listFlashes(ctx context.Context, artistID uuid.UUID, filter Li
 	}, nil
 }
 
-// requireArtist resolves the caller's artist profile, lazily provisioning it
-// if missing. The flashbook routes already gate the caller to the artist role,
-// so creating the row on demand here is safe (the net for artists whose row
-// wasn't created at activation).
 func (s *service) requireArtist(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error) {
 	artist, err := s.repo.GetArtistByUserID(ctx, userID)
 	if err == nil {
@@ -489,8 +479,6 @@ func (s *service) requireOwnership(ctx context.Context, userID uuid.UUID, row sq
 	return nil
 }
 
-// artistCurrency resolves the currency a flash should be priced in from the
-// artist's settings, falling back to CAD when no settings row exists yet.
 func (s *service) artistCurrency(ctx context.Context, artistID uuid.UUID) string {
 	settings, err := s.repo.GetArtistSettings(ctx, artistID)
 	if err != nil {

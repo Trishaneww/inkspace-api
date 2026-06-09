@@ -7,8 +7,6 @@ import (
 )
 
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
-	// Public: Stripe calls this server-to-server. Authenticity comes from the
-	// Stripe-Signature header (verified in the service), not a JWT.
 	rg.POST("/webhooks/stripe", m.Handler.StripeWebhook)
 
 	onboarding := rg.Group("/onboarding")
@@ -24,11 +22,13 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	authed.POST("/email", m.Handler.ChangeEmail)
 	authed.POST("/password", m.Handler.ChangePassword)
 	authed.POST("/avatar/presign", m.Handler.PresignAvatar)
-	authed.DELETE("/account", m.Handler.DeleteAccount) // Phase-2 stub
+	authed.DELETE("/account", m.Handler.DeleteAccount)
 
-	// Artist business configuration
 	artist := authed.Group("")
 	artist.Use(middleware.RequireRole(string(auth.RoleArtist)))
+
+	artist.GET("/open-book", m.Handler.GetOpenBook)
+	artist.PATCH("/open-book", m.Handler.UpdateOpenBook)
 
 	artist.GET("/settings", m.Handler.GetSettings)
 

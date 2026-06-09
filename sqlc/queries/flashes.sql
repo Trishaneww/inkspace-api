@@ -44,8 +44,8 @@ FROM flashes
 WHERE artist_id = @artist_id
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
 ORDER BY created_at DESC
-LIMIT @lim
-OFFSET @off;
+LIMIT @page_limit
+OFFSET @page_offset;
 
 -- name: CountFlashesByArtist :one
 SELECT

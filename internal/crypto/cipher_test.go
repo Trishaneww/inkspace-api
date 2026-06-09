@@ -22,15 +22,15 @@ func TestCipherRoundTrip(t *testing.T) {
 	}
 
 	plaintext := "ya29.a0AfH6SMexample-refresh-token"
-	encoded, err := c.Encrypt(plaintext)
+	ciphertext, err := c.Encrypt(plaintext)
 	if err != nil {
 		t.Fatalf("Encrypt: %v", err)
 	}
-	if encoded == plaintext {
+	if ciphertext == plaintext {
 		t.Fatal("ciphertext equals plaintext")
 	}
 
-	got, err := c.Decrypt(encoded)
+	got, err := c.Decrypt(ciphertext)
 	if err != nil {
 		t.Fatalf("Decrypt: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestDecryptWithWrongKeyFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCipher: %v", err)
 	}
-	encoded, err := enc.Encrypt("secret")
+	ciphertext, err := enc.Encrypt("secret")
 	if err != nil {
 		t.Fatalf("Encrypt: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestDecryptWithWrongKeyFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCipher: %v", err)
 	}
-	if _, err := other.Decrypt(encoded); err == nil {
+	if _, err := other.Decrypt(ciphertext); err == nil {
 		t.Fatal("expected decryption with wrong key to fail")
 	}
 }

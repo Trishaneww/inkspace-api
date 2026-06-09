@@ -23,9 +23,6 @@ type User struct {
 	Phone           string  `json:"phone,omitempty"`
 	AvatarURL       string  `json:"avatarUrl,omitempty"`
 	PhoneVerifiedAt *string `json:"phoneVerifiedAt,omitempty"`
-	// OnboardedAt is set once an artist finishes the mandatory onboarding flow.
-	// Absent/null for artists who haven't onboarded (which gates the onboarding
-	// modal) and for non-artist accounts.
 	OnboardedAt *string `json:"onboardedAt,omitempty"`
 	CreatedAt   string  `json:"createdAt"`
 }
@@ -56,7 +53,6 @@ func userFromRecord(u sqlc.User) User {
 }
 
 // ── Request payloads ─────────────────────────────────────────────
-
 type RegisterInput struct {
 	FirstName string `json:"firstName" binding:"required,min=1,max=50"`
 	LastName  string `json:"lastName"  binding:"required,min=1,max=50"`
@@ -64,8 +60,6 @@ type RegisterInput struct {
 	Phone     string `json:"phone"     binding:"required,min=7,max=20"`
 	Password  string `json:"password"  binding:"required,min=8"`
 	Role      Role   `json:"role"      binding:"required,oneof=artist studio_admin user"`
-	// Username + Instagram are no longer collected at signup — artists provide
-	// them in the mandatory onboarding flow, keeping signup minimal.
 }
 
 type LoginInput struct {
@@ -88,8 +82,6 @@ type OAuthCallbackInput struct {
 	RedirectURI string `json:"redirectUri" binding:"required"`
 }
 
-// Used by POST /v1/auth/oauth/complete when a first-time OAuth user
-// submits the prefilled signup form with the remaining fields.
 type RefreshInput struct {
 	RefreshToken string `json:"refreshToken" binding:"required"`
 }
@@ -101,30 +93,24 @@ type OAuthCompleteInput struct {
 	Password     string `json:"password"     binding:"required,min=8"`
 	Phone        string `json:"phone"        binding:"required,min=7,max=20"`
 	Role         Role   `json:"role"         binding:"required,oneof=artist studio_admin user"`
-	// Username + Instagram are collected in onboarding, not here.
 }
 
 // ── Response shapes ──────────────────────────────────────────────
-
 type AuthenticatedResponse struct {
-	Status       string `json:"status"` // always "authenticated"
+	Status       string `json:"status"`
 	Token        string `json:"token"`
 	RefreshToken string `json:"refreshToken"`
 	User         User   `json:"user"`
 }
 
 type PhoneVerificationRequiredResponse struct {
-	Status         string `json:"status"` // always "phone_verification_required"
+	Status         string `json:"status"`
 	VerificationID string `json:"verificationId"`
 	MaskedPhone    string `json:"maskedPhone"`
 }
 
-// Returned by OAuthCallback when the OAuth identity doesn't match an
-// existing user. The frontend prefills the signup form with email/name,
-// asks the user for password/phone/role, and POSTs the captured session
-// token back to /v1/auth/oauth/complete to finish the account.
 type OAuthCompleteProfileRequiredResponse struct {
-	Status       string `json:"status"` // always "oauth_complete_profile_required"
+	Status       string `json:"status"`
 	OAuthSession string `json:"oauthSession"`
 	Email        string `json:"email"`
 	FirstName    string `json:"firstName"`

@@ -59,11 +59,11 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
                                  ELSE COALESCE(sqlc.narg('deposit_flat_fee_cents')::bigint, deposit_flat_fee_cents)
                              END,
     max_advance_days       = CASE
-                                 WHEN @clear_max_advance::boolean THEN NULL
+                                 WHEN @clear_max_advance_days::boolean THEN NULL
                                  ELSE COALESCE(sqlc.narg('max_advance_days')::integer, max_advance_days)
                              END,
     cancellation_notice_hours = CASE
-                                 WHEN @clear_cancellation_notice::boolean THEN NULL
+                                 WHEN @clear_cancellation_notice_hours::boolean THEN NULL
                                  ELSE COALESCE(sqlc.narg('cancellation_notice_hours')::integer, cancellation_notice_hours)
                              END,
     stripe_account_id      = CASE
@@ -140,10 +140,10 @@ FROM artist_availability_windows
 WHERE artist_id = $1
 ORDER BY weekday, start_minute;
 
--- name: DeleteAvailabilityWindows :exec
+-- name: DeleteAllAvailabilityWindows :exec
 DELETE FROM artist_availability_windows WHERE artist_id = $1;
 
--- name: InsertAvailabilityWindow :one
+-- name: CreateAvailabilityWindow :one
 INSERT INTO artist_availability_windows (artist_id, weekday, start_minute, end_minute)
 VALUES (@artist_id, @weekday, @start_minute, @end_minute)
 RETURNING *;

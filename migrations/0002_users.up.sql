@@ -11,10 +11,6 @@ CREATE TABLE users (
     phone             TEXT,
     phone_verified_at TIMESTAMPTZ,
 
-    -- Account identity fields surfaced on Settings → Personal Info. These live
-    -- on `users` (not `artists`) because they belong to the account, regardless
-    -- of whether the user ever becomes an artist. username is optional but, when
-    -- set, globally unique.
     username          CITEXT,
     avatar_url        TEXT,
     instagram_url     TEXT

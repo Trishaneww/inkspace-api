@@ -1,8 +1,6 @@
 CREATE TABLE artist_settings (
     artist_id              UUID        PRIMARY KEY REFERENCES artists (id) ON DELETE CASCADE,
 
-    -- Personal Info (business side). Structured so a future booking page can
-    -- render the studio on a map (geocode by concatenating the parts).
     studio_name            TEXT        NOT NULL DEFAULT '',
     studio_address         TEXT        NOT NULL DEFAULT '',
     studio_city            TEXT        NOT NULL DEFAULT '',
@@ -10,38 +8,30 @@ CREATE TABLE artist_settings (
     studio_postal_code     TEXT        NOT NULL DEFAULT '',
     studio_country         TEXT        NOT NULL DEFAULT '',
 
-    -- Payments & payouts. stripe_account_id NULL = not yet connected.
     stripe_account_id      TEXT,
     payout_frequency       TEXT        NOT NULL DEFAULT 'weekly'
                            CHECK (payout_frequency IN ('weekly', 'biweekly', 'monthly')),
     currency               CHAR(3)     NOT NULL DEFAULT 'CAD',
 
-    -- Deposits. deposit_flat_fee_cents NULL = artist sets a custom amount per
-    -- client when sending the deposit link.
     deposit_flat_fee_cents BIGINT      CHECK (deposit_flat_fee_cents IS NULL OR deposit_flat_fee_cents >= 0),
     platform_fee_payer     TEXT        NOT NULL DEFAULT 'client'
                            CHECK (platform_fee_payer IN ('artist', 'client', 'split')),
 
-    -- Booking preferences
     accepting_bookings     BOOLEAN     NOT NULL DEFAULT true,
     timezone               TEXT        NOT NULL DEFAULT 'America/Toronto',
-    -- google_calendar_email NULL = calendar not connected.
     google_calendar_email  TEXT,
     slot_interval_minutes  INTEGER     NOT NULL DEFAULT 60
                            CHECK (slot_interval_minutes IN (15, 30, 60)),
     buffer_minutes         INTEGER     NOT NULL DEFAULT 0  CHECK (buffer_minutes >= 0),
     min_notice_minutes     INTEGER     NOT NULL DEFAULT 0  CHECK (min_notice_minutes >= 0),
-    -- max_advance_days NULL = no upper bound on how far out clients can book.
     max_advance_days       INTEGER     CHECK (max_advance_days IS NULL OR max_advance_days > 0),
 
-    -- Terms & consent
     terms_text             TEXT        NOT NULL DEFAULT '',
     terms_show_on_booking  BOOLEAN     NOT NULL DEFAULT false,
     terms_show_at_deposit  BOOLEAN     NOT NULL DEFAULT false,
     waiver_file_url        TEXT,
     waiver_required        BOOLEAN     NOT NULL DEFAULT false,
 
-    -- Notifications & messaging
     notify_by_email        BOOLEAN     NOT NULL DEFAULT true,
     notify_by_sms          BOOLEAN     NOT NULL DEFAULT false,
 

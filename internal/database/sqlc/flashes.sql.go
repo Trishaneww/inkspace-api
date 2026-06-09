@@ -363,6 +363,8 @@ ORDER BY
     END
 `
 
+// Batched fetch for a page of flashes, avoiding an N+1 of ListFlashPricingTiers.
+// Ordered by flash so callers can group sequentially, then by size.
 func (q *Queries) ListFlashPricingTiersForFlashes(ctx context.Context, flashIds []uuid.UUID) ([]FlashPricingTier, error) {
 	rows, err := q.db.Query(ctx, listFlashPricingTiersForFlashes, flashIds)
 	if err != nil {
@@ -399,18 +401,18 @@ OFFSET $3
 `
 
 type ListFlashesByArtistParams struct {
-	ArtistID uuid.UUID `json:"artist_id"`
-	Status   *string   `json:"status"`
-	Off      int32     `json:"off"`
-	Lim      int32     `json:"lim"`
+	ArtistID   uuid.UUID `json:"artist_id"`
+	Status     *string   `json:"status"`
+	PageOffset int32     `json:"page_offset"`
+	PageLimit  int32     `json:"page_limit"`
 }
 
 func (q *Queries) ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error) {
 	rows, err := q.db.Query(ctx, listFlashesByArtist,
 		arg.ArtistID,
 		arg.Status,
-		arg.Off,
-		arg.Lim,
+		arg.PageOffset,
+		arg.PageLimit,
 	)
 	if err != nil {
 		return nil, err

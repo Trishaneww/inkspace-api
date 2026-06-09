@@ -70,8 +70,8 @@ func (s *service) ConnectStripe(ctx context.Context, userID uuid.UUID) (StripeCo
 
 	link, err := accountlink.New(&stripe.AccountLinkParams{
 		Account:    stripe.String(accountID),
-		RefreshURL: stripe.String(s.stripeOnboardingURL("refresh")),
-		ReturnURL:  stripe.String(s.stripeOnboardingURL("return")),
+		RefreshURL: stripe.String(s.buildStripeOnboardingURL("refresh")),
+		ReturnURL:  stripe.String(s.buildStripeOnboardingURL("return")),
 		Type:       stripe.String("account_onboarding"),
 	})
 	if err != nil {
@@ -210,10 +210,10 @@ func payoutScheduleParams(frequency string) *stripe.AccountSettingsPayoutsSchedu
 	}
 }
 
-// stripeOnboardingURL builds the return/refresh links Stripe sends the artist
+// buildStripeOnboardingURL builds the return/refresh links Stripe sends the artist
 // back to after the hosted onboarding flow. Lands on the Payments & Payouts tab,
 // which reads the stripe status param to refresh the connection state ("return")
 // or re-trigger onboarding ("refresh", used when an account link expires).
-func (s *service) stripeOnboardingURL(status string) string {
+func (s *service) buildStripeOnboardingURL(status string) string {
 	return fmt.Sprintf("%s/dashboard/artist/settings?tab=payments&stripe=%s", s.cfg.FrontendURL, status)
 }

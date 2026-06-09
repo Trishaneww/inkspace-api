@@ -138,14 +138,14 @@ func (s *service) exchangeGoogleCode(ctx context.Context, code, redirectURI stri
 		return googleTokenResponse{}, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var tr googleTokenResponse
-	if err := json.Unmarshal(body, &tr); err != nil {
+	var tokenResp googleTokenResponse
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
 		return googleTokenResponse{}, fmt.Errorf("decode token response: %w", err)
 	}
-	if tr.AccessToken == "" {
+	if tokenResp.AccessToken == "" {
 		return googleTokenResponse{}, fmt.Errorf("token response missing access_token")
 	}
-	return tr, nil
+	return tokenResp, nil
 }
 
 func (s *service) revokeGoogleToken(ctx context.Context, token string) {

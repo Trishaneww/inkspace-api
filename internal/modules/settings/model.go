@@ -3,8 +3,6 @@ package settings
 import "time"
 
 // ── Enums ────────────────────────────────────────────────────────────────
-// PayoutFrequency mirrors Stripe's supported automatic-payout intervals.
-// Stripe has no native biweekly interval, so only weekly/monthly are offered.
 type PayoutFrequency string
 
 const (
@@ -20,8 +18,6 @@ const (
 	FeePayerSplit  PlatformFeePayer = "split"
 )
 
-// DepositRefundPolicy governs whether a client is eligible for a deposit refund.
-// The chosen policy is snapshotted onto each payment request at pay time.
 type DepositRefundPolicy string
 
 const (
@@ -87,14 +83,14 @@ type ArtistSettings struct {
 	WaiverRequired     bool   `json:"waiverRequired"`
 
 	NotifyByEmail bool `json:"notifyByEmail"`
-	NotifyBySms   bool `json:"notifyBySms"`
+	NotifyBySMS   bool `json:"notifyBySms"`
 
 	Styles []string `json:"styles"`
 }
 
 type AvailabilityWindow struct {
 	ID          string `json:"id"`
-	Weekday     int32  `json:"weekday"` // 0 = Sunday .. 6 = Saturday
+	Weekday     int32  `json:"weekday"`
 	StartMinute int32  `json:"startMinute"`
 	EndMinute   int32  `json:"endMinute"`
 }
@@ -119,7 +115,7 @@ type SettingsResponse struct {
 	Settings       ArtistSettings       `json:"settings"`
 	Availability   []AvailabilityWindow `json:"availability"`
 	SessionPresets []SessionPreset      `json:"sessionPresets"`
-	DaysOff        []string             `json:"daysOff"` // YYYY-MM-DD
+	DaysOff        []string             `json:"daysOff"`
 	Blocklist      []BlocklistEntry     `json:"blocklist"`
 }
 
@@ -173,26 +169,21 @@ type UpdateSettingsInput struct {
 	TermsShowAtDeposit  *bool   `json:"termsShowAtDeposit"`
 	WaiverRequired      *bool   `json:"waiverRequired"`
 	NotifyByEmail       *bool   `json:"notifyByEmail"`
-	NotifyBySms         *bool   `json:"notifyBySms"`
+	NotifyBySMS         *bool   `json:"notifyBySms"`
 
-	// Nullable fields: send the value to set it, or set the paired clear flag
-	// to unset it.
 	DepositFlatFeeCents *int64  `json:"depositFlatFeeCents"`
 	ClearDepositFlatFee bool    `json:"clearDepositFlatFee"`
 	MaxAdvanceDays      *int32  `json:"maxAdvanceDays"`
-	ClearMaxAdvance     bool    `json:"clearMaxAdvance"`
+	ClearMaxAdvanceDays bool    `json:"clearMaxAdvance"`
 	WaiverFileURL       *string `json:"waiverFileUrl"`
 	ClearWaiverFile     bool    `json:"clearWaiverFile"`
 
 	CancellationNoticeHours *int32 `json:"cancellationNoticeHours"`
-	ClearCancellationNotice bool   `json:"clearCancellationNotice"`
+	ClearCancellationNoticeHours bool   `json:"clearCancellationNotice"`
 
 	Styles *[]string `json:"styles"`
 }
 
-// StripeConnectResponse carries the Stripe-hosted onboarding URL the frontend
-// redirects the artist to. Same shape whether the account is newly created or
-// the artist is resuming/re-opening onboarding.
 type StripeConnectResponse struct {
 	URL string `json:"url"`
 }
@@ -222,7 +213,7 @@ type UpdatePresetInput struct {
 }
 
 type DayOffInput struct {
-	Day string `json:"day" binding:"required"` // YYYY-MM-DD
+	Day string `json:"day" binding:"required"` 
 }
 
 type CreateBlocklistInput struct {

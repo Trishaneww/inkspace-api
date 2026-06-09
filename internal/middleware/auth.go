@@ -15,16 +15,14 @@ const (
 	CtxRoleKey   = "role"
 )
 
-// RequireAuth verifies a Bearer JWT signed with `secret`, then exposes
-// the user id + role on the gin context for downstream handlers.
 func RequireAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authz := c.GetHeader("Authorization")
-		if authz == "" {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
 			httpx.Error(c, 401, "unauthorized", "missing bearer token")
 			return
 		}
-		parts := strings.SplitN(authz, " ", 2)
+		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
 			httpx.Error(c, 401, "unauthorized", "malformed Authorization header")
 			return
@@ -61,8 +59,6 @@ func RequireAuth(secret string) gin.HandlerFunc {
 	}
 }
 
-// RequireRole gates a route to one of the given roles. It must run after
-// RequireAuth (which sets the role claim on the context).
 func RequireRole(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, ok := RoleFromContext(c)
@@ -80,7 +76,6 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 	}
 }
 
-// UserIDFromContext pulls the verified user id set by RequireAuth.
 func UserIDFromContext(c *gin.Context) (uuid.UUID, bool) {
 	v, exists := c.Get(CtxUserIDKey)
 	if !exists {
@@ -90,7 +85,6 @@ func UserIDFromContext(c *gin.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
-// RoleFromContext returns the role claim set by RequireAuth, if present.
 func RoleFromContext(c *gin.Context) (string, bool) {
 	v, exists := c.Get(CtxRoleKey)
 	if !exists {

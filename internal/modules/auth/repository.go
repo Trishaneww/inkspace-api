@@ -18,7 +18,6 @@ type Repository interface {
 	GetUserByUsername(ctx context.Context, username *string) (sqlc.User, error)
 	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
 
-	// EnsureArtist provisions the artist profile row for a user (idempotent).
 	EnsureArtist(ctx context.Context, userID uuid.UUID) error
 	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
 
