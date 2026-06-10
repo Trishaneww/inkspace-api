@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"encoding/json"
+
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 )
 
@@ -58,6 +60,8 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 		TermsShowOnBooking:      r.TermsShowOnBooking,
 		TermsShowAtDeposit:      r.TermsShowAtDeposit,
 		WaiverRequired:          r.WaiverRequired,
+		Aftercare:               r.Aftercare,
+		FAQs:                    parseFAQs(r.Faqs),
 		NotifyByEmail:           r.NotifyByEmail,
 		NotifyBySMS:             r.NotifyBySMS,
 		Styles:                  r.Styles,
@@ -73,6 +77,17 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 		out.WaiverFileURL = *r.WaiverFileURL
 	}
 	return out
+}
+
+func parseFAQs(raw []byte) []FAQItem {
+	faqs := []FAQItem{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &faqs)
+	}
+	if faqs == nil {
+		faqs = []FAQItem{}
+	}
+	return faqs
 }
 
 func availabilityFromRow(r sqlc.ArtistAvailabilityWindow) AvailabilityWindow {

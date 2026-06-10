@@ -82,10 +82,18 @@ type ArtistSettings struct {
 	WaiverFileURL      string `json:"waiverFileUrl"`
 	WaiverRequired     bool   `json:"waiverRequired"`
 
+	Aftercare string    `json:"aftercare"`
+	FAQs      []FAQItem `json:"faqs"`
+
 	NotifyByEmail bool `json:"notifyByEmail"`
 	NotifyBySMS   bool `json:"notifyBySms"`
 
 	Styles []string `json:"styles"`
+}
+
+type FAQItem struct {
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
 }
 
 type AvailabilityWindow struct {
@@ -155,21 +163,23 @@ type UpdateSettingsInput struct {
 	StudioPostalCode *string `json:"studioPostalCode"`
 	StudioCountry    *string `json:"studioCountry"`
 
-	PayoutFrequency     *string `json:"payoutFrequency"`
-	Currency            *string `json:"currency"`
-	PlatformFeePayer    *string `json:"platformFeePayer"`
-	DepositRefundPolicy *string `json:"depositRefundPolicy"`
-	AcceptingBookings   *bool   `json:"acceptingBookings"`
-	Timezone            *string `json:"timezone"`
-	SlotIntervalMinutes *int32  `json:"slotIntervalMinutes"`
-	BufferMinutes       *int32  `json:"bufferMinutes"`
-	MinNoticeMinutes    *int32  `json:"minNoticeMinutes"`
-	TermsText           *string `json:"termsText"`
-	TermsShowOnBooking  *bool   `json:"termsShowOnBooking"`
-	TermsShowAtDeposit  *bool   `json:"termsShowAtDeposit"`
-	WaiverRequired      *bool   `json:"waiverRequired"`
-	NotifyByEmail       *bool   `json:"notifyByEmail"`
-	NotifyBySMS         *bool   `json:"notifyBySms"`
+	PayoutFrequency     *string    `json:"payoutFrequency"`
+	Currency            *string    `json:"currency"`
+	PlatformFeePayer    *string    `json:"platformFeePayer"`
+	DepositRefundPolicy *string    `json:"depositRefundPolicy"`
+	AcceptingBookings   *bool      `json:"acceptingBookings"`
+	Timezone            *string    `json:"timezone"`
+	SlotIntervalMinutes *int32     `json:"slotIntervalMinutes"`
+	BufferMinutes       *int32     `json:"bufferMinutes"`
+	MinNoticeMinutes    *int32     `json:"minNoticeMinutes"`
+	TermsText           *string    `json:"termsText"`
+	TermsShowOnBooking  *bool      `json:"termsShowOnBooking"`
+	TermsShowAtDeposit  *bool      `json:"termsShowAtDeposit"`
+	WaiverRequired      *bool      `json:"waiverRequired"`
+	Aftercare           *string    `json:"aftercare"`
+	FAQs                *[]FAQItem `json:"faqs"`
+	NotifyByEmail       *bool      `json:"notifyByEmail"`
+	NotifyBySMS         *bool      `json:"notifyBySms"`
 
 	DepositFlatFeeCents *int64  `json:"depositFlatFeeCents"`
 	ClearDepositFlatFee bool    `json:"clearDepositFlatFee"`
@@ -178,7 +188,7 @@ type UpdateSettingsInput struct {
 	WaiverFileURL       *string `json:"waiverFileUrl"`
 	ClearWaiverFile     bool    `json:"clearWaiverFile"`
 
-	CancellationNoticeHours *int32 `json:"cancellationNoticeHours"`
+	CancellationNoticeHours      *int32 `json:"cancellationNoticeHours"`
 	ClearCancellationNoticeHours bool   `json:"clearCancellationNotice"`
 
 	Styles *[]string `json:"styles"`
@@ -213,7 +223,7 @@ type UpdatePresetInput struct {
 }
 
 type DayOffInput struct {
-	Day string `json:"day" binding:"required"` 
+	Day string `json:"day" binding:"required"`
 }
 
 type CreateBlocklistInput struct {
@@ -244,7 +254,7 @@ type OnboardingInput struct {
 
 	DepositFlatFeeCents *int64 `json:"depositFlatFeeCents"`
 	SchedulingMode      string `json:"schedulingMode" binding:"required,oneof=artist_scheduled client_scheduled"`
-	
+
 	Styles []string `json:"styles"`
 }
 

@@ -49,7 +49,6 @@ type Querier interface {
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
-	// Counts that back the dashboard stat cards.
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
@@ -79,7 +78,6 @@ type Querier interface {
 	RefreshPhoneVerificationCode(ctx context.Context, arg RefreshPhoneVerificationCodeParams) error
 	RemoveBlocklistEntry(ctx context.Context, arg RemoveBlocklistEntryParams) error
 	RemoveDayOff(ctx context.Context, arg RemoveDayOffParams) error
-	// Undo a decision: return the request to the inbox as a fresh (pending) lead.
 	ReopenBookingRequest(ctx context.Context, arg ReopenBookingRequestParams) (BookingRequest, error)
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
@@ -93,9 +91,6 @@ type Querier interface {
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)
 	UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) (OpenBook, error)
-	// Full-field replace: the edit sheet submits the complete item state, so a
-	// nil narg here intentionally clears the column (lets the artist remove an
-	// optional value, which a COALESCE-merge update couldn't).
 	UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error)
 	UpdateSessionPreset(ctx context.Context, arg UpdateSessionPresetParams) (ArtistSessionPreset, error)
 	UpdateStripeAccountStatus(ctx context.Context, arg UpdateStripeAccountStatusParams) (ArtistSetting, error)

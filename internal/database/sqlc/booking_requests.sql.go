@@ -154,7 +154,6 @@ type GetBookingStatsRow struct {
 	BookedThisMonth int64 `json:"booked_this_month"`
 }
 
-// Counts that back the dashboard stat cards.
 func (q *Queries) GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error) {
 	row := q.db.QueryRow(ctx, getBookingStats, artistID)
 	var i GetBookingStatsRow
@@ -228,7 +227,6 @@ type ReopenBookingRequestParams struct {
 	ArtistID uuid.UUID `json:"artist_id"`
 }
 
-// Undo a decision: return the request to the inbox as a fresh (pending) lead.
 func (q *Queries) ReopenBookingRequest(ctx context.Context, arg ReopenBookingRequestParams) (BookingRequest, error) {
 	row := q.db.QueryRow(ctx, reopenBookingRequest, arg.ID, arg.ArtistID)
 	var i BookingRequest

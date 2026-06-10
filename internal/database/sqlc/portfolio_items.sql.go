@@ -377,9 +377,6 @@ type UpdatePortfolioItemParams struct {
 	ID               uuid.UUID   `json:"id"`
 }
 
-// Full-field replace: the edit sheet submits the complete item state, so a
-// nil narg here intentionally clears the column (lets the artist remove an
-// optional value, which a COALESCE-merge update couldn't).
 func (q *Queries) UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error) {
 	row := q.db.QueryRow(ctx, updatePortfolioItem,
 		arg.Title,

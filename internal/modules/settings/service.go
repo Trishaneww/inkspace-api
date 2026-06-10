@@ -351,11 +351,11 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 		}
 
 		if len(input.Availability) > 0 {
-		if err := tx.DeleteAllAvailabilityWindows(ctx, artist.ID); err != nil {
-			return err
-		}
-		for _, w := range input.Availability {
-			if _, err := tx.CreateAvailabilityWindow(ctx, sqlc.CreateAvailabilityWindowParams{
+			if err := tx.DeleteAllAvailabilityWindows(ctx, artist.ID); err != nil {
+				return err
+			}
+			for _, w := range input.Availability {
+				if _, err := tx.CreateAvailabilityWindow(ctx, sqlc.CreateAvailabilityWindowParams{
 					ArtistID:    artist.ID,
 					Weekday:     w.Weekday,
 					StartMinute: w.StartMinute,
@@ -518,30 +518,31 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 	}
 
 	params := sqlc.UpdateArtistSettingsParams{
-		ArtistID:                artist.ID,
-		StudioName:              trimmedPtr(input.StudioName),
-		StudioAddress:           trimmedPtr(input.StudioAddress),
-		StudioCity:              trimmedPtr(input.StudioCity),
-		StudioProvince:          trimmedPtr(input.StudioProvince),
-		StudioPostalCode:        trimmedPtr(input.StudioPostalCode),
-		StudioCountry:           trimmedPtr(input.StudioCountry),
-		Timezone:                trimmedPtr(input.Timezone),
-		TermsText:               input.TermsText,
-		AcceptingBookings:       input.AcceptingBookings,
-		TermsShowOnBooking:      input.TermsShowOnBooking,
-		TermsShowAtDeposit:      input.TermsShowAtDeposit,
-		WaiverRequired:          input.WaiverRequired,
-		NotifyByEmail:           input.NotifyByEmail,
-		NotifyBySMS:             input.NotifyBySMS,
-		BufferMinutes:           input.BufferMinutes,
-		MinNoticeMinutes:        input.MinNoticeMinutes,
-		DepositFlatFeeCents:     input.DepositFlatFeeCents,
-		ClearDepositFlatFee:     input.ClearDepositFlatFee,
-		MaxAdvanceDays:          input.MaxAdvanceDays,
-		ClearMaxAdvanceDays:         input.ClearMaxAdvanceDays,
-		WaiverFileURL:               input.WaiverFileURL,
-		ClearWaiverFile:             input.ClearWaiverFile,
-		CancellationNoticeHours:     input.CancellationNoticeHours,
+		ArtistID:                     artist.ID,
+		StudioName:                   trimmedPtr(input.StudioName),
+		StudioAddress:                trimmedPtr(input.StudioAddress),
+		StudioCity:                   trimmedPtr(input.StudioCity),
+		StudioProvince:               trimmedPtr(input.StudioProvince),
+		StudioPostalCode:             trimmedPtr(input.StudioPostalCode),
+		StudioCountry:                trimmedPtr(input.StudioCountry),
+		Timezone:                     trimmedPtr(input.Timezone),
+		TermsText:                    input.TermsText,
+		Aftercare:                    input.Aftercare,
+		AcceptingBookings:            input.AcceptingBookings,
+		TermsShowOnBooking:           input.TermsShowOnBooking,
+		TermsShowAtDeposit:           input.TermsShowAtDeposit,
+		WaiverRequired:               input.WaiverRequired,
+		NotifyByEmail:                input.NotifyByEmail,
+		NotifyBySMS:                  input.NotifyBySMS,
+		BufferMinutes:                input.BufferMinutes,
+		MinNoticeMinutes:             input.MinNoticeMinutes,
+		DepositFlatFeeCents:          input.DepositFlatFeeCents,
+		ClearDepositFlatFee:          input.ClearDepositFlatFee,
+		MaxAdvanceDays:               input.MaxAdvanceDays,
+		ClearMaxAdvanceDays:          input.ClearMaxAdvanceDays,
+		WaiverFileURL:                input.WaiverFileURL,
+		ClearWaiverFile:              input.ClearWaiverFile,
+		CancellationNoticeHours:      input.CancellationNoticeHours,
 		ClearCancellationNoticeHours: input.ClearCancellationNoticeHours,
 	}
 
@@ -584,6 +585,28 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 			return ArtistSettings{}, fmt.Errorf("%w: unknown tattoo style", ErrInvalidInput)
 		}
 		params.Styles = *input.Styles
+	}
+	if input.FAQs != nil {
+		faqs := make([]FAQItem, 0, len(*input.FAQs))
+		for _, f := range *input.FAQs {
+			question := strings.TrimSpace(f.Question)
+			answer := strings.TrimSpace(f.Answer)
+			if question == "" && answer == "" {
+				continue
+			}
+			if question == "" || answer == "" {
+				return ArtistSettings{}, fmt.Errorf("%w: each FAQ needs both a question and an answer", ErrInvalidInput)
+			}
+			faqs = append(faqs, FAQItem{Question: question, Answer: answer})
+		}
+		if len(faqs) > 5 {
+			return ArtistSettings{}, fmt.Errorf("%w: you can add up to 5 FAQs", ErrInvalidInput)
+		}
+		raw, err := json.Marshal(faqs)
+		if err != nil {
+			return ArtistSettings{}, err
+		}
+		params.Faqs = raw
 	}
 
 	// If the payout frequency changed and a Stripe account is connected, push the

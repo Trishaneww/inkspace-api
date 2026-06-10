@@ -89,6 +89,8 @@ type ArtistSetting struct {
 	DepositRefundPolicy        string             `json:"deposit_refund_policy"`
 	CancellationNoticeHours    *int32             `json:"cancellation_notice_hours"`
 	Styles                     []string           `json:"styles"`
+	Aftercare                  string             `json:"aftercare"`
+	Faqs                       []byte             `json:"faqs"`
 }
 
 type BookingRequest struct {
