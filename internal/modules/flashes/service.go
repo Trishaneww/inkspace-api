@@ -204,6 +204,9 @@ func (s *service) Update(ctx context.Context, userID, flashID uuid.UUID, input U
 	if err := s.requireOwnership(ctx, userID, existing); err != nil {
 		return Flash{}, err
 	}
+	if err := validateDepositCents(input.DepositCents); err != nil {
+		return Flash{}, err
+	}
 
 	params := sqlc.UpdateFlashParams{
 		ID:                  flashID,
@@ -536,8 +539,19 @@ func validateCreateInput(input CreateFlashInput) error {
 		return fmt.Errorf("%w: pricing_mode must be per_size or flat", ErrInvalidInput)
 	}
 
+	if err := validateDepositCents(input.DepositCents); err != nil {
+		return err
+	}
+
 	if input.Publish && (input.S3Key == nil || *input.S3Key == "") {
 		return fmt.Errorf("%w: publish requires an uploaded image (s3_key)", ErrInvalidInput)
+	}
+	return nil
+}
+
+func validateDepositCents(cents *int64) error {
+	if cents == nil || *cents <= 0 {
+		return fmt.Errorf("%w: a deposit greater than zero is required", ErrInvalidInput)
 	}
 	return nil
 }
