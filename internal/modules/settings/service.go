@@ -78,6 +78,12 @@ type Service interface {
 	SetAvailability(ctx context.Context, userID uuid.UUID, input SetAvailabilityInput) ([]AvailabilityWindow, error)
 	PresignWaiverUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error)
 
+	// Locations (home studio + guest spots)
+	CreateLocation(ctx context.Context, userID uuid.UUID, input CreateLocationInput) (Location, error)
+	UpdateLocation(ctx context.Context, userID, locationID uuid.UUID, input UpdateLocationInput) (Location, error)
+	DeleteLocation(ctx context.Context, userID, locationID uuid.UUID) error
+	SetCurrentLocation(ctx context.Context, userID uuid.UUID, input SetCurrentLocationInput) error
+
 	// Integrations
 	ConnectStripe(ctx context.Context, userID uuid.UUID) (StripeConnectResponse, error)
 	RefreshStripeStatus(ctx context.Context, userID uuid.UUID) (ArtistSettings, error)
@@ -143,14 +149,22 @@ func (s *service) GetSettings(ctx context.Context, userID uuid.UUID) (SettingsRe
 	if err != nil {
 		return SettingsResponse{}, err
 	}
+	locations, err := s.repo.ListArtistLocations(ctx, artist.ID)
+	if err != nil {
+		return SettingsResponse{}, err
+	}
 
 	resp := SettingsResponse{
 		Account:        s.accountResponse(ctx, user),
+		Locations:      make([]Location, 0, len(locations)),
 		Settings:       s.settingsResponse(ctx, srow),
 		Availability:   make([]AvailabilityWindow, 0, len(windows)),
 		SessionPresets: make([]SessionPreset, 0, len(presets)),
 		DaysOff:        make([]string, 0, len(daysOff)),
 		Blocklist:      make([]BlocklistEntry, 0, len(blocklist)),
+	}
+	for _, l := range locations {
+		resp.Locations = append(resp.Locations, getLocationFromRow(l))
 	}
 	for _, w := range windows {
 		resp.Availability = append(resp.Availability, availabilityFromRow(w))
@@ -337,15 +351,32 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 
 		if _, err := tx.UpdateArtistSettings(ctx, sqlc.UpdateArtistSettingsParams{
 			ArtistID:            artist.ID,
-			StudioName:          trimmedPtr(&input.StudioName),
-			StudioAddress:       trimmedPtr(&input.StudioAddress),
-			StudioCity:          trimmedPtr(&input.StudioCity),
-			StudioProvince:      trimmedPtr(&input.StudioProvince),
-			StudioPostalCode:    trimmedPtr(&input.StudioPostalCode),
-			StudioCountry:       trimmedPtr(&input.StudioCountry),
 			Timezone:            trimmedPtr(&input.Timezone),
 			DepositFlatFeeCents: input.DepositFlatFeeCents,
 			Styles:              input.Styles,
+		}); err != nil {
+			return err
+		}
+
+		// The home studio is the artist's primary location, and the one they
+		// start out working from.
+		home, err := tx.CreateArtistLocation(ctx, sqlc.CreateArtistLocationParams{
+			ArtistID:   artist.ID,
+			Label:      strings.TrimSpace(input.StudioName),
+			Address:    strings.TrimSpace(input.StudioAddress),
+			City:       strings.TrimSpace(input.StudioCity),
+			Province:   strings.TrimSpace(input.StudioProvince),
+			PostalCode: strings.TrimSpace(input.StudioPostalCode),
+			Country:    strings.TrimSpace(input.StudioCountry),
+			Timezone:   strings.TrimSpace(input.Timezone),
+			IsPrimary:  true,
+		})
+		if err != nil {
+			return err
+		}
+		if err := tx.SetCurrentLocation(ctx, sqlc.SetCurrentLocationParams{
+			ArtistID:          artist.ID,
+			CurrentLocationID: pgUUID(home.ID),
 		}); err != nil {
 			return err
 		}
@@ -519,12 +550,6 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 
 	params := sqlc.UpdateArtistSettingsParams{
 		ArtistID:                     artist.ID,
-		StudioName:                   trimmedPtr(input.StudioName),
-		StudioAddress:                trimmedPtr(input.StudioAddress),
-		StudioCity:                   trimmedPtr(input.StudioCity),
-		StudioProvince:               trimmedPtr(input.StudioProvince),
-		StudioPostalCode:             trimmedPtr(input.StudioPostalCode),
-		StudioCountry:                trimmedPtr(input.StudioCountry),
 		Timezone:                     trimmedPtr(input.Timezone),
 		TermsText:                    input.TermsText,
 		Aftercare:                    input.Aftercare,
@@ -625,6 +650,201 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 		return ArtistSettings{}, err
 	}
 	return s.settingsResponse(ctx, srow), nil
+}
+
+// ── Locations (home studio + guest spots) ──────────────────────────────────
+func (s *service) CreateLocation(ctx context.Context, userID uuid.UUID, input CreateLocationInput) (Location, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return Location{}, err
+	}
+
+	city := strings.TrimSpace(input.City)
+	country := strings.TrimSpace(input.Country)
+	if city == "" || country == "" {
+		return Location{}, fmt.Errorf("%w: a guest spot needs at least a city and country", ErrInvalidInput)
+	}
+
+	start, err := parseDate(input.StartDate)
+	if err != nil {
+		return Location{}, err
+	}
+	end, err := parseDate(input.EndDate)
+	if err != nil {
+		return Location{}, err
+	}
+	if !start.Valid || !end.Valid {
+		return Location{}, fmt.Errorf("%w: a guest spot needs a start and end date", ErrInvalidInput)
+	}
+	if end.Time.Before(start.Time) {
+		return Location{}, fmt.Errorf("%w: the end date must be on or after the start date", ErrInvalidInput)
+	}
+
+	existing, err := s.repo.ListArtistLocations(ctx, artist.ID)
+	if err != nil {
+		return Location{}, err
+	}
+	if overlapsAnyGuestSpot(start.Time, end.Time, existing, uuid.Nil) {
+		return Location{}, fmt.Errorf("%w: those dates overlap another guest spot", ErrInvalidInput)
+	}
+
+	row, err := s.repo.CreateArtistLocation(ctx, sqlc.CreateArtistLocationParams{
+		ArtistID:   artist.ID,
+		Label:      strings.TrimSpace(input.Label),
+		Address:    strings.TrimSpace(input.Address),
+		City:       city,
+		Province:   strings.TrimSpace(input.Province),
+		PostalCode: strings.TrimSpace(input.PostalCode),
+		Country:    country,
+		Timezone:   strings.TrimSpace(input.Timezone),
+		IsPrimary:  false,
+		StartDate:  start,
+		EndDate:    end,
+	})
+	if err != nil {
+		return Location{}, err
+	}
+	return getLocationFromRow(row), nil
+}
+
+func (s *service) UpdateLocation(ctx context.Context, userID, locationID uuid.UUID, input UpdateLocationInput) (Location, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return Location{}, err
+	}
+
+	current, err := s.repo.GetArtistLocation(ctx, sqlc.GetArtistLocationParams{ID: locationID, ArtistID: artist.ID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Location{}, ErrNotFound
+		}
+		return Location{}, err
+	}
+
+	params := sqlc.UpdateArtistLocationParams{
+		ID:         locationID,
+		ArtistID:   artist.ID,
+		Label:      trimmedPtr(input.Label),
+		Address:    trimmedPtr(input.Address),
+		City:       trimmedPtr(input.City),
+		Province:   trimmedPtr(input.Province),
+		PostalCode: trimmedPtr(input.PostalCode),
+		Country:    trimmedPtr(input.Country),
+		Timezone:   trimmedPtr(input.Timezone),
+	}
+
+	if !current.IsPrimary && !input.ClearDates {
+		start, err := parseDate(input.StartDate)
+		if err != nil {
+			return Location{}, err
+		}
+		end, err := parseDate(input.EndDate)
+		if err != nil {
+			return Location{}, err
+		}
+
+		effectiveStart := current.StartDate
+		if start.Valid {
+			effectiveStart = start
+		}
+		effectiveEnd := current.EndDate
+		if end.Valid {
+			effectiveEnd = end
+		}
+		if effectiveStart.Valid && effectiveEnd.Valid {
+			if effectiveEnd.Time.Before(effectiveStart.Time) {
+				return Location{}, fmt.Errorf("%w: the end date must be on or after the start date", ErrInvalidInput)
+			}
+			existing, err := s.repo.ListArtistLocations(ctx, artist.ID)
+			if err != nil {
+				return Location{}, err
+			}
+			if overlapsAnyGuestSpot(effectiveStart.Time, effectiveEnd.Time, existing, locationID) {
+				return Location{}, fmt.Errorf("%w: those dates overlap another guest spot", ErrInvalidInput)
+			}
+		}
+		params.StartDate = start
+		params.EndDate = end
+	} else if input.ClearDates {
+		params.ClearDates = true
+	}
+
+	row, err := s.repo.UpdateArtistLocation(ctx, params)
+	if err != nil {
+		return Location{}, err
+	}
+	return getLocationFromRow(row), nil
+}
+
+// DeleteLocation closes a guest spot. The row is kept (soft-deleted) so booking
+// requests retain their location and we keep a history of where the artist has
+// worked; the home studio can't be closed.
+func (s *service) DeleteLocation(ctx context.Context, userID, locationID uuid.UUID) error {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.CloseArtistLocation(ctx, sqlc.CloseArtistLocationParams{ID: locationID, ArtistID: artist.ID}); err != nil {
+		return err
+	}
+	return s.resetCurrentLocationIfClosed(ctx, artist.ID, locationID)
+}
+
+// resetCurrentLocationIfClosed falls the artist back to their home studio when
+// they close the very spot they were working from, so the active location never
+// points at a closed one.
+func (s *service) resetCurrentLocationIfClosed(ctx context.Context, artistID, closedID uuid.UUID) error {
+	settings, err := s.repo.GetArtistSettings(ctx, artistID)
+	if err != nil {
+		return err
+	}
+	if !settings.CurrentLocationID.Valid || uuid.UUID(settings.CurrentLocationID.Bytes) != closedID {
+		return nil
+	}
+	primary, err := s.repo.GetPrimaryLocation(ctx, artistID)
+	if err != nil {
+		return err
+	}
+	return s.repo.SetCurrentLocation(ctx, sqlc.SetCurrentLocationParams{
+		ArtistID:          artistID,
+		CurrentLocationID: pgUUID(primary.ID),
+	})
+}
+
+func (s *service) SetCurrentLocation(ctx context.Context, userID uuid.UUID, input SetCurrentLocationInput) error {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	locationID, err := uuid.Parse(strings.TrimSpace(input.LocationID))
+	if err != nil {
+		return fmt.Errorf("%w: invalid location", ErrInvalidInput)
+	}
+	if _, err := s.repo.GetArtistLocation(ctx, sqlc.GetArtistLocationParams{ID: locationID, ArtistID: artist.ID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	return s.repo.SetCurrentLocation(ctx, sqlc.SetCurrentLocationParams{
+		ArtistID:          artist.ID,
+		CurrentLocationID: pgUUID(locationID),
+	})
+}
+
+
+func overlapsAnyGuestSpot(start, end time.Time, locations []sqlc.ArtistLocation, excludeID uuid.UUID) bool {
+	for _, l := range locations {
+		if l.IsPrimary || l.ID == excludeID || !l.StartDate.Valid || !l.EndDate.Valid {
+			continue
+		}
+		if !start.After(l.EndDate.Time) && !l.StartDate.Time.After(end) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *service) SetAvailability(ctx context.Context, userID uuid.UUID, input SetAvailabilityInput) ([]AvailabilityWindow, error) {
@@ -910,6 +1130,21 @@ func nilIfEmpty(in *string) *string {
 		return nil
 	}
 	return in
+}
+
+func pgUUID(id uuid.UUID) pgtype.UUID {
+	return pgtype.UUID{Bytes: id, Valid: true}
+}
+
+func parseDate(value *string) (pgtype.Date, error) {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return pgtype.Date{}, nil
+	}
+	t, err := time.Parse(dateLayout, strings.TrimSpace(*value))
+	if err != nil {
+		return pgtype.Date{}, fmt.Errorf("%w: invalid date %q (use YYYY-MM-DD)", ErrInvalidInput, *value)
+	}
+	return pgtype.Date{Time: t, Valid: true}, nil
 }
 
 func isUniqueViolation(err error) bool {

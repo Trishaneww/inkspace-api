@@ -19,9 +19,13 @@ type Querier interface {
 	ClaimFlash(ctx context.Context, arg ClaimFlashParams) (Flash, error)
 	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
+	// Soft-delete a guest spot: mark it closed but keep the row so booking
+	// requests retain their location. The home studio can't be closed.
+	CloseArtistLocation(ctx context.Context, arg CloseArtistLocationParams) error
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
 	CountPortfolioItemsByArtist(ctx context.Context, arg CountPortfolioItemsByArtistParams) (CountPortfolioItemsByArtistRow, error)
+	CreateArtistLocation(ctx context.Context, arg CreateArtistLocationParams) (ArtistLocation, error)
 	CreateAvailabilityWindow(ctx context.Context, arg CreateAvailabilityWindowParams) (ArtistAvailabilityWindow, error)
 	CreateBookingRequest(ctx context.Context, arg CreateBookingRequestParams) (BookingRequest, error)
 	CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash, error)
@@ -45,6 +49,7 @@ type Querier interface {
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
+	GetArtistLocation(ctx context.Context, arg GetArtistLocationParams) (ArtistLocation, error)
 	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
@@ -54,12 +59,19 @@ type Querier interface {
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
 	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
 	GetPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
+	GetPrimaryLocation(ctx context.Context, artistID uuid.UUID) (ArtistLocation, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByPhone(ctx context.Context, phone *string) (User, error)
 	GetUserByUsername(ctx context.Context, username *string) (User, error)
 	IncrementFlashViewCount(ctx context.Context, id uuid.UUID) error
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
+	// Every location including closed ones, so a booking request can always
+	// resolve the spot it was tagged with even after the artist closes it.
+	ListAllArtistLocations(ctx context.Context, artistID uuid.UUID) ([]ArtistLocation, error)
+	// Active locations only — what the artist can currently work from and what
+	// clients can book. Closed guest spots are excluded.
+	ListArtistLocations(ctx context.Context, artistID uuid.UUID) ([]ArtistLocation, error)
 	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]ArtistAvailabilityWindow, error)
 	ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]ArtistBlocklist, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error)
@@ -83,10 +95,12 @@ type Querier interface {
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
+	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
+	UpdateArtistLocation(ctx context.Context, arg UpdateArtistLocationParams) (ArtistLocation, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)

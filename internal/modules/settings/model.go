@@ -46,12 +46,7 @@ type Account struct {
 }
 
 type ArtistSettings struct {
-	StudioName       string `json:"studioName"`
-	StudioAddress    string `json:"studioAddress"`
-	StudioCity       string `json:"studioCity"`
-	StudioProvince   string `json:"studioProvince"`
-	StudioPostalCode string `json:"studioPostalCode"`
-	StudioCountry    string `json:"studioCountry"`
+	CurrentLocationID string `json:"currentLocationId"`
 
 	// StripeConnected = an account exists. ChargesEnabled is the real gate for
 	// "can accept deposits"; an account can exist but be mid-onboarding.
@@ -118,8 +113,52 @@ type BlocklistEntry struct {
 	Note  string `json:"note"`
 }
 
+type Location struct {
+	ID         string  `json:"id"`
+	Label      string  `json:"label"`
+	Address    string  `json:"address"`
+	City       string  `json:"city"`
+	Province   string  `json:"province"`
+	PostalCode string  `json:"postalCode"`
+	Country    string  `json:"country"`
+	Timezone   string  `json:"timezone"`
+	IsPrimary  bool    `json:"isPrimary"`
+	StartDate  *string `json:"startDate"` // YYYY-MM-DD; null for the home studio
+	EndDate    *string `json:"endDate"`
+}
+
+type CreateLocationInput struct {
+	Label      string  `json:"label"`
+	Address    string  `json:"address"`
+	City       string  `json:"city"`
+	Province   string  `json:"province"`
+	PostalCode string  `json:"postalCode"`
+	Country    string  `json:"country"`
+	Timezone   string  `json:"timezone"`
+	StartDate  *string `json:"startDate"`
+	EndDate    *string `json:"endDate"`
+}
+
+type UpdateLocationInput struct {
+	Label      *string `json:"label"`
+	Address    *string `json:"address"`
+	City       *string `json:"city"`
+	Province   *string `json:"province"`
+	PostalCode *string `json:"postalCode"`
+	Country    *string `json:"country"`
+	Timezone   *string `json:"timezone"`
+	StartDate  *string `json:"startDate"`
+	EndDate    *string `json:"endDate"`
+	ClearDates bool    `json:"clearDates"`
+}
+
+type SetCurrentLocationInput struct {
+	LocationID string `json:"locationId"`
+}
+
 type SettingsResponse struct {
 	Account        Account              `json:"account"`
+	Locations      []Location           `json:"locations"`
 	Settings       ArtistSettings       `json:"settings"`
 	Availability   []AvailabilityWindow `json:"availability"`
 	SessionPresets []SessionPreset      `json:"sessionPresets"`
@@ -156,13 +195,6 @@ type PresignUploadInput struct {
 }
 
 type UpdateSettingsInput struct {
-	StudioName       *string `json:"studioName"`
-	StudioAddress    *string `json:"studioAddress"`
-	StudioCity       *string `json:"studioCity"`
-	StudioProvince   *string `json:"studioProvince"`
-	StudioPostalCode *string `json:"studioPostalCode"`
-	StudioCountry    *string `json:"studioCountry"`
-
 	PayoutFrequency     *string    `json:"payoutFrequency"`
 	Currency            *string    `json:"currency"`
 	PlatformFeePayer    *string    `json:"platformFeePayer"`

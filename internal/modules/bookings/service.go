@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
@@ -58,7 +59,24 @@ func (s *service) ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryL
 	for _, row := range rows {
 		inquiries = append(inquiries, inquiryFromRow(row))
 	}
+	s.attachLocations(ctx, artist.ID, inquiries)
 	return InquiryListResponse{Inquiries: inquiries, Stats: statsFromRow(statsRow)}, nil
+}
+
+func (s *service) attachLocations(ctx context.Context, artistID uuid.UUID, inquiries []Inquiry) {
+	locations, err := s.repo.ListAllArtistLocations(ctx, artistID)
+	if err != nil || len(locations) == 0 {
+		return
+	}
+	byID := make(map[string]sqlc.ArtistLocation, len(locations))
+	for _, l := range locations {
+		byID[l.ID.String()] = l
+	}
+	for i := range inquiries {
+		if loc, ok := byID[inquiries[i].LocationID]; ok {
+			inquiries[i].Location = inquiryLocationFromRow(loc)
+		}
+	}
 }
 
 func (s *service) GetInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error) {
@@ -136,6 +154,16 @@ func (s *service) updateStatus(ctx context.Context, artistID, inquiryID uuid.UUI
 
 func (s *service) enrichInquiry(ctx context.Context, row sqlc.BookingRequest) (Inquiry, error) {
 	inquiry := inquiryFromRow(row)
+	if inquiry.LocationID != "" {
+		if locations, err := s.repo.ListAllArtistLocations(ctx, row.ArtistID); err == nil {
+			for _, l := range locations {
+				if l.ID.String() == inquiry.LocationID {
+					inquiry.Location = inquiryLocationFromRow(l)
+					break
+				}
+			}
+		}
+	}
 	if s.s3 == nil {
 		return inquiry, nil
 	}
@@ -177,18 +205,23 @@ func (s *service) SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, 
 		return 0, err
 	}
 
+	locations, err := s.repo.ListAllArtistLocations(ctx, artist.ID)
+	if err != nil {
+		return 0, err
+	}
+
 	availability := []byte(`[{"weekday":1,"ranges":[["600","1080"]]},{"weekday":4,"ranges":[["600","1080"]]}]`)
 
 	samples := []struct {
-		name, email, placement, description, pieceType string
-		size                                           int32
+		name, email, placement, description, pieceType, colorType string
+		size                                                      int32
 	}{
-		{"Maya Chen", "maya@example.com", "forearm", "Fine-line botanical half sleeve, black and grey.", "custom", 8},
-		{"Devon Park", "devon@example.com", "ribs", "Loves the koi flash piece — slightly enlarged.", "flash", 6},
-		{"Sam Rivera", "sam@example.com", "calf", "Traditional eagle, full colour.", "custom", 10},
-		{"Jordan Lee", "jordan@example.com", "shoulder", "Small geometric mountain range.", "custom", 4},
-		{"Avery Brooks", "avery@example.com", "wrist", "Matching script with partner.", "custom", 3},
-		{"Riley Quinn", "riley@example.com", "thigh", "Ornamental mandala, dotwork.", "custom", 7},
+		{"Maya Chen", "maya@example.com", "forearm", "Fine-line botanical half sleeve, black and grey.", "custom", "black_and_grey", 8},
+		{"Devon Park", "devon@example.com", "ribs", "Loves the koi flash piece — slightly enlarged.", "flash", "color", 6},
+		{"Sam Rivera", "sam@example.com", "calf", "Traditional eagle, full colour.", "custom", "color", 10},
+		{"Jordan Lee", "jordan@example.com", "shoulder", "Small geometric mountain range.", "custom", "black_and_grey", 4},
+		{"Avery Brooks", "avery@example.com", "wrist", "Matching script with partner.", "custom", "either", 3},
+		{"Riley Quinn", "riley@example.com", "thigh", "Ornamental mandala, dotwork.", "custom", "black_and_grey", 7},
 	}
 
 	customAnswers := []byte(`[{"prompt":"Is this your first tattoo?","answer":"No — this is my third."}]`)
@@ -202,6 +235,11 @@ func (s *service) SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, 
 			styles = []string{"fine_line", "blackwork"}
 		}
 
+		locationID := pgtype.UUID{}
+		if len(locations) > 0 {
+			locationID = pgtype.UUID{Bytes: locations[i%len(locations)].ID, Valid: true}
+		}
+
 		created, err := s.repo.CreateBookingRequest(ctx, sqlc.CreateBookingRequestParams{
 			ArtistID:           artist.ID,
 			OpenBookID:         book.ID,
@@ -210,12 +248,14 @@ func (s *service) SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, 
 			ReferenceImageKeys: []string{},
 			Placement:          sample.placement,
 			ApproxSizeInches:   &size,
+			ColorType:          sample.colorType,
+			LocationID:         locationID,
 			Styles:             styles,
 			ClientAvailability: availability,
 			CustomAnswers:      customAnswers,
 			ClientName:         sample.name,
 			ClientEmail:        sample.email,
-			ClientPhone:        &phone,
+			ClientPhone:        phone,
 			Status:             "pending",
 			DepositStatus:      "not_required",
 			WaiverStatus:       "not_required",

@@ -1,12 +1,12 @@
 -- name: CreateBookingRequest :one
 INSERT INTO booking_requests (
-    artist_id, open_book_id, type, flash_id, description, reference_image_keys,
-    placement, approx_size_inches, styles, client_availability, custom_answers,
+    artist_id, open_book_id, location_id, type, flash_id, description, reference_image_keys,
+    placement, approx_size_inches, color_type, styles, client_availability, custom_answers,
     client_name, client_email, client_phone, status, deposit_status, waiver_status
 ) VALUES (
-    @artist_id, @open_book_id, @type, sqlc.narg('flash_id'), @description, @reference_image_keys,
-    @placement, sqlc.narg('approx_size_inches'), @styles, @client_availability, @custom_answers,
-    @client_name, @client_email, sqlc.narg('client_phone'), @status, @deposit_status, @waiver_status
+    @artist_id, @open_book_id, sqlc.narg('location_id'), @type, sqlc.narg('flash_id'), @description, @reference_image_keys,
+    @placement, sqlc.narg('approx_size_inches'), @color_type, @styles, @client_availability, @custom_answers,
+    @client_name, @client_email, @client_phone, @status, @deposit_status, @waiver_status
 )
 RETURNING *;
 

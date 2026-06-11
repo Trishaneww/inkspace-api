@@ -35,6 +35,15 @@ type Repository interface {
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
 	UpdateArtistSettings(ctx context.Context, params sqlc.UpdateArtistSettingsParams) (sqlc.ArtistSetting, error)
 
+	// Locations (home studio + guest spots)
+	CreateArtistLocation(ctx context.Context, params sqlc.CreateArtistLocationParams) (sqlc.ArtistLocation, error)
+	ListArtistLocations(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistLocation, error)
+	GetArtistLocation(ctx context.Context, params sqlc.GetArtistLocationParams) (sqlc.ArtistLocation, error)
+	GetPrimaryLocation(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistLocation, error)
+	UpdateArtistLocation(ctx context.Context, params sqlc.UpdateArtistLocationParams) (sqlc.ArtistLocation, error)
+	CloseArtistLocation(ctx context.Context, params sqlc.CloseArtistLocationParams) error
+	SetCurrentLocation(ctx context.Context, params sqlc.SetCurrentLocationParams) error
+
 	// Stripe Connect account linkage + onboarding status
 	SetStripeAccount(ctx context.Context, params sqlc.SetStripeAccountParams) (sqlc.ArtistSetting, error)
 	UpdateStripeAccountStatus(ctx context.Context, params sqlc.UpdateStripeAccountStatusParams) (sqlc.ArtistSetting, error)
@@ -146,6 +155,34 @@ func (r *repository) GetArtistSettings(ctx context.Context, artistID uuid.UUID) 
 
 func (r *repository) UpdateArtistSettings(ctx context.Context, params sqlc.UpdateArtistSettingsParams) (sqlc.ArtistSetting, error) {
 	return r.q.UpdateArtistSettings(ctx, params)
+}
+
+func (r *repository) CreateArtistLocation(ctx context.Context, params sqlc.CreateArtistLocationParams) (sqlc.ArtistLocation, error) {
+	return r.q.CreateArtistLocation(ctx, params)
+}
+
+func (r *repository) ListArtistLocations(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistLocation, error) {
+	return r.q.ListArtistLocations(ctx, artistID)
+}
+
+func (r *repository) GetArtistLocation(ctx context.Context, params sqlc.GetArtistLocationParams) (sqlc.ArtistLocation, error) {
+	return r.q.GetArtistLocation(ctx, params)
+}
+
+func (r *repository) GetPrimaryLocation(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistLocation, error) {
+	return r.q.GetPrimaryLocation(ctx, artistID)
+}
+
+func (r *repository) UpdateArtistLocation(ctx context.Context, params sqlc.UpdateArtistLocationParams) (sqlc.ArtistLocation, error) {
+	return r.q.UpdateArtistLocation(ctx, params)
+}
+
+func (r *repository) CloseArtistLocation(ctx context.Context, params sqlc.CloseArtistLocationParams) error {
+	return r.q.CloseArtistLocation(ctx, params)
+}
+
+func (r *repository) SetCurrentLocation(ctx context.Context, params sqlc.SetCurrentLocationParams) error {
+	return r.q.SetCurrentLocation(ctx, params)
 }
 
 func (r *repository) SetStripeAccount(ctx context.Context, params sqlc.SetStripeAccountParams) (sqlc.ArtistSetting, error) {

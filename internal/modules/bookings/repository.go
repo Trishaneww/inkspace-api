@@ -16,6 +16,9 @@ type Repository interface {
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (sqlc.ArtistSetting, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (sqlc.OpenBook, error)
+	// Includes closed spots so a request can resolve the location it was tagged
+	// with even after the artist closes it.
+	ListAllArtistLocations(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistLocation, error)
 
 	CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.BookingRequest, error)
@@ -52,6 +55,10 @@ func (r *repository) GetArtistSettings(ctx context.Context, artistID uuid.UUID) 
 
 func (r *repository) GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (sqlc.OpenBook, error) {
 	return r.q.GetOpenBookByArtist(ctx, artistID)
+}
+
+func (r *repository) ListAllArtistLocations(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistLocation, error) {
+	return r.q.ListAllArtistLocations(ctx, artistID)
 }
 
 func (r *repository) CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error) {

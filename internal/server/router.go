@@ -12,6 +12,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/auth"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/bookings"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/flashes"
+	"github.com/trishaneupnexx/inkspace-api/internal/modules/openbook"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/portfolios"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/settings"
 )
@@ -24,4 +25,5 @@ func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pu
 	flashes.New(cfg, db, pub, s3).RegisterRoutes(api)
 	settings.New(cfg, db, s3).RegisterRoutes(api)
 	bookings.New(cfg, db, s3).RegisterRoutes(api)
+	openbook.New(cfg, db, s3).RegisterRoutes(api)
 }

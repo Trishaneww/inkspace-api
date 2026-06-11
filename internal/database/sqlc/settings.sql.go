@@ -68,7 +68,7 @@ SET google_calendar_email         = NULL,
     google_calendar_token_expiry  = NULL,
     updated_at                    = now()
 WHERE artist_id = $1
-RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs
+RETURNING artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id
 `
 
 func (q *Queries) ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error) {
@@ -76,12 +76,6 @@ func (q *Queries) ClearGoogleCalendarConnection(ctx context.Context, artistID uu
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -114,6 +108,7 @@ func (q *Queries) ClearGoogleCalendarConnection(ctx context.Context, artistID uu
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }
@@ -126,7 +121,7 @@ SET stripe_account_id        = NULL,
     stripe_details_submitted = false,
     updated_at               = now()
 WHERE artist_id = $1
-RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs
+RETURNING artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id
 `
 
 func (q *Queries) ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error) {
@@ -134,12 +129,6 @@ func (q *Queries) ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (A
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -172,6 +161,7 @@ func (q *Queries) ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (A
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }
@@ -278,7 +268,7 @@ func (q *Queries) EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) 
 }
 
 const getArtistSettings = `-- name: GetArtistSettings :one
-SELECT artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs FROM artist_settings WHERE artist_id = $1
+SELECT artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id FROM artist_settings WHERE artist_id = $1
 `
 
 func (q *Queries) GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error) {
@@ -286,12 +276,6 @@ func (q *Queries) GetArtistSettings(ctx context.Context, artistID uuid.UUID) (Ar
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -324,12 +308,13 @@ func (q *Queries) GetArtistSettings(ctx context.Context, artistID uuid.UUID) (Ar
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }
 
 const getArtistSettingsByStripeAccount = `-- name: GetArtistSettingsByStripeAccount :one
-SELECT artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs FROM artist_settings WHERE stripe_account_id = $1
+SELECT artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id FROM artist_settings WHERE stripe_account_id = $1
 `
 
 func (q *Queries) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error) {
@@ -337,12 +322,6 @@ func (q *Queries) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAc
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -375,6 +354,7 @@ func (q *Queries) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAc
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }
@@ -572,7 +552,7 @@ SET google_calendar_email         = $1::text,
     google_calendar_token_expiry  = $4::timestamptz,
     updated_at                    = now()
 WHERE artist_id = $5
-RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs
+RETURNING artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id
 `
 
 type SetGoogleCalendarConnectionParams struct {
@@ -594,12 +574,6 @@ func (q *Queries) SetGoogleCalendarConnection(ctx context.Context, arg SetGoogle
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -632,6 +606,7 @@ func (q *Queries) SetGoogleCalendarConnection(ctx context.Context, arg SetGoogle
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }
@@ -644,7 +619,7 @@ SET stripe_account_id        = $1::text,
     stripe_details_submitted = false,
     updated_at               = now()
 WHERE artist_id = $2
-RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs
+RETURNING artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id
 `
 
 type SetStripeAccountParams struct {
@@ -657,12 +632,6 @@ func (q *Queries) SetStripeAccount(ctx context.Context, arg SetStripeAccountPara
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -695,74 +664,63 @@ func (q *Queries) SetStripeAccount(ctx context.Context, arg SetStripeAccountPara
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }
 
 const updateArtistSettings = `-- name: UpdateArtistSettings :one
 UPDATE artist_settings
-SET studio_name            = COALESCE($1::text,            studio_name),
-    studio_address         = COALESCE($2::text,         studio_address),
-    studio_city            = COALESCE($3::text,            studio_city),
-    studio_province        = COALESCE($4::text,        studio_province),
-    studio_postal_code     = COALESCE($5::text,     studio_postal_code),
-    studio_country         = COALESCE($6::text,         studio_country),
-    payout_frequency       = COALESCE($7::text,       payout_frequency),
-    currency               = COALESCE($8::char(3),            currency),
-    platform_fee_payer     = COALESCE($9::text,     platform_fee_payer),
-    accepting_bookings     = COALESCE($10::boolean,  accepting_bookings),
-    timezone               = COALESCE($11::text,               timezone),
-    slot_interval_minutes  = COALESCE($12::integer, slot_interval_minutes),
-    buffer_minutes         = COALESCE($13::integer,      buffer_minutes),
-    min_notice_minutes     = COALESCE($14::integer,  min_notice_minutes),
-    terms_text             = COALESCE($15::text,             terms_text),
-    terms_show_on_booking  = COALESCE($16::boolean,  terms_show_on_booking),
-    terms_show_at_deposit  = COALESCE($17::boolean,  terms_show_at_deposit),
-    waiver_required        = COALESCE($18::boolean,     waiver_required),
-    notify_by_email        = COALESCE($19::boolean,     notify_by_email),
-    notify_by_sms          = COALESCE($20::boolean,       notify_by_sms),
-    deposit_refund_policy  = COALESCE($21::text,  deposit_refund_policy),
-    styles                 = COALESCE($22::text[],              styles),
-    aftercare              = COALESCE($23::text,              aftercare),
-    faqs                   = COALESCE($24::jsonb,                  faqs),
+SET payout_frequency       = COALESCE($1::text,       payout_frequency),
+    currency               = COALESCE($2::char(3),            currency),
+    platform_fee_payer     = COALESCE($3::text,     platform_fee_payer),
+    accepting_bookings     = COALESCE($4::boolean,  accepting_bookings),
+    timezone               = COALESCE($5::text,               timezone),
+    slot_interval_minutes  = COALESCE($6::integer, slot_interval_minutes),
+    buffer_minutes         = COALESCE($7::integer,      buffer_minutes),
+    min_notice_minutes     = COALESCE($8::integer,  min_notice_minutes),
+    terms_text             = COALESCE($9::text,             terms_text),
+    terms_show_on_booking  = COALESCE($10::boolean,  terms_show_on_booking),
+    terms_show_at_deposit  = COALESCE($11::boolean,  terms_show_at_deposit),
+    waiver_required        = COALESCE($12::boolean,     waiver_required),
+    notify_by_email        = COALESCE($13::boolean,     notify_by_email),
+    notify_by_sms          = COALESCE($14::boolean,       notify_by_sms),
+    deposit_refund_policy  = COALESCE($15::text,  deposit_refund_policy),
+    styles                 = COALESCE($16::text[],              styles),
+    aftercare              = COALESCE($17::text,              aftercare),
+    faqs                   = COALESCE($18::jsonb,                  faqs),
 
     -- Nullable fields support explicit clearing via a paired boolean.
     deposit_flat_fee_cents = CASE
-                                 WHEN $25::boolean THEN NULL
-                                 ELSE COALESCE($26::bigint, deposit_flat_fee_cents)
+                                 WHEN $19::boolean THEN NULL
+                                 ELSE COALESCE($20::bigint, deposit_flat_fee_cents)
                              END,
     max_advance_days       = CASE
-                                 WHEN $27::boolean THEN NULL
-                                 ELSE COALESCE($28::integer, max_advance_days)
+                                 WHEN $21::boolean THEN NULL
+                                 ELSE COALESCE($22::integer, max_advance_days)
                              END,
     cancellation_notice_hours = CASE
-                                 WHEN $29::boolean THEN NULL
-                                 ELSE COALESCE($30::integer, cancellation_notice_hours)
+                                 WHEN $23::boolean THEN NULL
+                                 ELSE COALESCE($24::integer, cancellation_notice_hours)
                              END,
     stripe_account_id      = CASE
-                                 WHEN $31::boolean THEN NULL
-                                 ELSE COALESCE($32::text, stripe_account_id)
+                                 WHEN $25::boolean THEN NULL
+                                 ELSE COALESCE($26::text, stripe_account_id)
                              END,
     google_calendar_email  = CASE
-                                 WHEN $33::boolean THEN NULL
-                                 ELSE COALESCE($34::text, google_calendar_email)
+                                 WHEN $27::boolean THEN NULL
+                                 ELSE COALESCE($28::text, google_calendar_email)
                              END,
     waiver_file_url        = CASE
-                                 WHEN $35::boolean THEN NULL
-                                 ELSE COALESCE($36::text, waiver_file_url)
+                                 WHEN $29::boolean THEN NULL
+                                 ELSE COALESCE($30::text, waiver_file_url)
                              END,
     updated_at             = now()
-WHERE artist_id = $37
-RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs
+WHERE artist_id = $31
+RETURNING artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id
 `
 
 type UpdateArtistSettingsParams struct {
-	StudioName                   *string   `json:"studio_name"`
-	StudioAddress                *string   `json:"studio_address"`
-	StudioCity                   *string   `json:"studio_city"`
-	StudioProvince               *string   `json:"studio_province"`
-	StudioPostalCode             *string   `json:"studio_postal_code"`
-	StudioCountry                *string   `json:"studio_country"`
 	PayoutFrequency              *string   `json:"payout_frequency"`
 	Currency                     *string   `json:"currency"`
 	PlatformFeePayer             *string   `json:"platform_fee_payer"`
@@ -798,12 +756,6 @@ type UpdateArtistSettingsParams struct {
 
 func (q *Queries) UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error) {
 	row := q.db.QueryRow(ctx, updateArtistSettings,
-		arg.StudioName,
-		arg.StudioAddress,
-		arg.StudioCity,
-		arg.StudioProvince,
-		arg.StudioPostalCode,
-		arg.StudioCountry,
 		arg.PayoutFrequency,
 		arg.Currency,
 		arg.PlatformFeePayer,
@@ -839,12 +791,6 @@ func (q *Queries) UpdateArtistSettings(ctx context.Context, arg UpdateArtistSett
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -877,6 +823,7 @@ func (q *Queries) UpdateArtistSettings(ctx context.Context, arg UpdateArtistSett
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }
@@ -929,7 +876,7 @@ SET stripe_charges_enabled   = $1::boolean,
     stripe_details_submitted = $3::boolean,
     updated_at               = now()
 WHERE artist_id = $4
-RETURNING artist_id, studio_name, studio_address, studio_city, studio_province, studio_postal_code, studio_country, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs
+RETURNING artist_id, stripe_account_id, payout_frequency, currency, deposit_flat_fee_cents, platform_fee_payer, accepting_bookings, timezone, google_calendar_email, slot_interval_minutes, buffer_minutes, min_notice_minutes, max_advance_days, terms_text, terms_show_on_booking, terms_show_at_deposit, waiver_file_url, waiver_required, notify_by_email, notify_by_sms, created_at, updated_at, google_calendar_access_token, google_calendar_refresh_token, google_calendar_token_expiry, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, deposit_refund_policy, cancellation_notice_hours, styles, aftercare, faqs, current_location_id
 `
 
 type UpdateStripeAccountStatusParams struct {
@@ -949,12 +896,6 @@ func (q *Queries) UpdateStripeAccountStatus(ctx context.Context, arg UpdateStrip
 	var i ArtistSetting
 	err := row.Scan(
 		&i.ArtistID,
-		&i.StudioName,
-		&i.StudioAddress,
-		&i.StudioCity,
-		&i.StudioProvince,
-		&i.StudioPostalCode,
-		&i.StudioCountry,
 		&i.StripeAccountID,
 		&i.PayoutFrequency,
 		&i.Currency,
@@ -987,6 +928,7 @@ func (q *Queries) UpdateStripeAccountStatus(ctx context.Context, arg UpdateStrip
 		&i.Styles,
 		&i.Aftercare,
 		&i.Faqs,
+		&i.CurrentLocationID,
 	)
 	return i, err
 }

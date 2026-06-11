@@ -3,8 +3,12 @@ package settings
 import (
 	"encoding/json"
 
+	"github.com/google/uuid"
+
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 )
+
+const dateLayout = "2006-01-02"
 
 func accountFromUser(u sqlc.User) Account {
 	out := Account{
@@ -34,12 +38,6 @@ func accountFromUser(u sqlc.User) Account {
 
 func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 	out := ArtistSettings{
-		StudioName:              r.StudioName,
-		StudioAddress:           r.StudioAddress,
-		StudioCity:              r.StudioCity,
-		StudioProvince:          r.StudioProvince,
-		StudioPostalCode:        r.StudioPostalCode,
-		StudioCountry:           r.StudioCountry,
 		StripeConnected:         r.StripeAccountID != nil && *r.StripeAccountID != "",
 		StripeChargesEnabled:    r.StripeChargesEnabled,
 		StripePayoutsEnabled:    r.StripePayoutsEnabled,
@@ -75,6 +73,32 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 	}
 	if r.WaiverFileURL != nil {
 		out.WaiverFileURL = *r.WaiverFileURL
+	}
+	if r.CurrentLocationID.Valid {
+		out.CurrentLocationID = uuid.UUID(r.CurrentLocationID.Bytes).String()
+	}
+	return out
+}
+
+func getLocationFromRow(r sqlc.ArtistLocation) Location {
+	out := Location{
+		ID:         r.ID.String(),
+		Label:      r.Label,
+		Address:    r.Address,
+		City:       r.City,
+		Province:   r.Province,
+		PostalCode: r.PostalCode,
+		Country:    r.Country,
+		Timezone:   r.Timezone,
+		IsPrimary:  r.IsPrimary,
+	}
+	if r.StartDate.Valid {
+		s := r.StartDate.Time.Format(dateLayout)
+		out.StartDate = &s
+	}
+	if r.EndDate.Valid {
+		s := r.EndDate.Time.Format(dateLayout)
+		out.EndDate = &s
 	}
 	return out
 }

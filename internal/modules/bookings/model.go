@@ -18,26 +18,39 @@ const (
 )
 
 type Inquiry struct {
-	ID                     string          `json:"id"`
-	Type                   RequestType     `json:"type"`
-	FlashID                *string         `json:"flashId,omitempty"`
-	Description            string          `json:"description"`
-	ReferenceImageKeys     []string        `json:"referenceImageKeys"`
-	ReferenceImageURLs     []string        `json:"referenceImageUrls"`
-	Placement              string          `json:"placement"`
-	ApproxSizeInches       *int32          `json:"approxSizeInches,omitempty"`
-	Styles                 []string        `json:"styles"`
-	ClientAvailability     json.RawMessage `json:"clientAvailability"`
-	CustomAnswers          json.RawMessage `json:"customAnswers"`
-	ClientName             string          `json:"clientName"`
-	ClientEmail            string          `json:"clientEmail"`
-	ClientPhone            string          `json:"clientPhone,omitempty"`
-	Status                 string          `json:"status"`
-	DepositStatus          string          `json:"depositStatus"`
-	WaiverStatus           string          `json:"waiverStatus"`
-	SessionDurationMinutes *int32          `json:"sessionDurationMinutes,omitempty"`
-	CreatedAt              string          `json:"createdAt"`
-	DecidedAt              *string         `json:"decidedAt,omitempty"`
+	ID                     string           `json:"id"`
+	Type                   RequestType      `json:"type"`
+	FlashID                *string          `json:"flashId,omitempty"`
+	Description            string           `json:"description"`
+	ReferenceImageKeys     []string         `json:"referenceImageKeys"`
+	ReferenceImageURLs     []string         `json:"referenceImageUrls"`
+	Placement              string           `json:"placement"`
+	ApproxSizeInches       *int32           `json:"approxSizeInches,omitempty"`
+	ColorType              string           `json:"colorType"`
+	LocationID             string           `json:"locationId,omitempty"`
+	Location               *InquiryLocation `json:"location"`
+	Styles                 []string         `json:"styles"`
+	ClientAvailability     json.RawMessage  `json:"clientAvailability"`
+	CustomAnswers          json.RawMessage  `json:"customAnswers"`
+	ClientName             string           `json:"clientName"`
+	ClientEmail            string           `json:"clientEmail"`
+	ClientPhone            string           `json:"clientPhone,omitempty"`
+	Status                 string           `json:"status"`
+	DepositStatus          string           `json:"depositStatus"`
+	WaiverStatus           string           `json:"waiverStatus"`
+	SessionDurationMinutes *int32           `json:"sessionDurationMinutes,omitempty"`
+	CreatedAt              string           `json:"createdAt"`
+	DecidedAt              *string          `json:"decidedAt,omitempty"`
+}
+
+type InquiryLocation struct {
+	Label     string  `json:"label"`
+	Address   string  `json:"address"`
+	City      string  `json:"city"`
+	Country   string  `json:"country"`
+	IsPrimary bool    `json:"isPrimary"`
+	StartDate *string `json:"startDate,omitempty"`
+	EndDate   *string `json:"endDate,omitempty"`
 }
 
 type BookingStats struct {
@@ -65,6 +78,7 @@ func inquiryFromRow(row sqlc.BookingRequest) Inquiry {
 		ReferenceImageKeys:     row.ReferenceImageKeys,
 		Placement:              row.Placement,
 		ApproxSizeInches:       row.ApproxSizeInches,
+		ColorType:              row.ColorType,
 		Styles:                 row.Styles,
 		ClientAvailability:     normalizeJSON(row.ClientAvailability),
 		CustomAnswers:          normalizeJSON(row.CustomAnswers),
@@ -83,16 +97,36 @@ func inquiryFromRow(row sqlc.BookingRequest) Inquiry {
 	if out.Styles == nil {
 		out.Styles = []string{}
 	}
-	if row.ClientPhone != nil {
-		out.ClientPhone = *row.ClientPhone
-	}
+	out.ClientPhone = row.ClientPhone
 	if row.FlashID.Valid {
 		s := uuid.UUID(row.FlashID.Bytes).String()
 		out.FlashID = &s
 	}
+	if row.LocationID.Valid {
+		out.LocationID = uuid.UUID(row.LocationID.Bytes).String()
+	}
 	if row.DecidedAt.Valid {
 		s := row.DecidedAt.Time.UTC().Format(time.RFC3339)
 		out.DecidedAt = &s
+	}
+	return out
+}
+
+func inquiryLocationFromRow(l sqlc.ArtistLocation) *InquiryLocation {
+	out := &InquiryLocation{
+		Label:     l.Label,
+		Address:   l.Address,
+		City:      l.City,
+		Country:   l.Country,
+		IsPrimary: l.IsPrimary,
+	}
+	if l.StartDate.Valid {
+		s := l.StartDate.Time.Format("2006-01-02")
+		out.StartDate = &s
+	}
+	if l.EndDate.Valid {
+		s := l.EndDate.Time.Format("2006-01-02")
+		out.EndDate = &s
 	}
 	return out
 }
