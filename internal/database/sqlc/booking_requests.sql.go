@@ -14,32 +14,34 @@ import (
 
 const createBookingRequest = `-- name: CreateBookingRequest :one
 INSERT INTO booking_requests (
-    artist_id, open_book_id, type, flash_id, description, reference_image_keys,
-    placement, approx_size_inches, styles, client_availability, custom_answers,
+    artist_id, open_book_id, location_id, type, flash_id, description, reference_image_keys,
+    placement, approx_size_inches, color_type, styles, client_availability, custom_answers,
     client_name, client_email, client_phone, status, deposit_status, waiver_status
 ) VALUES (
-    $1, $2, $3, $4, $5, $6,
-    $7, $8, $9, $10, $11,
-    $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7,
+    $8, $9, $10, $11, $12, $13,
+    $14, $15, $16, $17, $18, $19
 )
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id
 `
 
 type CreateBookingRequestParams struct {
 	ArtistID           uuid.UUID   `json:"artist_id"`
 	OpenBookID         uuid.UUID   `json:"open_book_id"`
+	LocationID         pgtype.UUID `json:"location_id"`
 	Type               string      `json:"type"`
 	FlashID            pgtype.UUID `json:"flash_id"`
 	Description        string      `json:"description"`
 	ReferenceImageKeys []string    `json:"reference_image_keys"`
 	Placement          string      `json:"placement"`
 	ApproxSizeInches   *int32      `json:"approx_size_inches"`
+	ColorType          string      `json:"color_type"`
 	Styles             []string    `json:"styles"`
 	ClientAvailability []byte      `json:"client_availability"`
 	CustomAnswers      []byte      `json:"custom_answers"`
 	ClientName         string      `json:"client_name"`
 	ClientEmail        string      `json:"client_email"`
-	ClientPhone        *string     `json:"client_phone"`
+	ClientPhone        string      `json:"client_phone"`
 	Status             string      `json:"status"`
 	DepositStatus      string      `json:"deposit_status"`
 	WaiverStatus       string      `json:"waiver_status"`
@@ -49,12 +51,14 @@ func (q *Queries) CreateBookingRequest(ctx context.Context, arg CreateBookingReq
 	row := q.db.QueryRow(ctx, createBookingRequest,
 		arg.ArtistID,
 		arg.OpenBookID,
+		arg.LocationID,
 		arg.Type,
 		arg.FlashID,
 		arg.Description,
 		arg.ReferenceImageKeys,
 		arg.Placement,
 		arg.ApproxSizeInches,
+		arg.ColorType,
 		arg.Styles,
 		arg.ClientAvailability,
 		arg.CustomAnswers,
@@ -90,12 +94,14 @@ func (q *Queries) CreateBookingRequest(ctx context.Context, arg CreateBookingReq
 		&i.DecidedAt,
 		&i.Styles,
 		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
 	)
 	return i, err
 }
 
 const getBookingRequest = `-- name: GetBookingRequest :one
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id
 FROM booking_requests
 WHERE id = $1 AND artist_id = $2
 `
@@ -132,6 +138,8 @@ func (q *Queries) GetBookingRequest(ctx context.Context, arg GetBookingRequestPa
 		&i.DecidedAt,
 		&i.Styles,
 		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
 	)
 	return i, err
 }
@@ -162,7 +170,7 @@ func (q *Queries) GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetB
 }
 
 const listBookingRequestsByArtist = `-- name: ListBookingRequestsByArtist :many
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id
 FROM booking_requests
 WHERE artist_id = $1
 ORDER BY created_at DESC
@@ -201,6 +209,8 @@ func (q *Queries) ListBookingRequestsByArtist(ctx context.Context, artistID uuid
 			&i.DecidedAt,
 			&i.Styles,
 			&i.CustomAnswers,
+			&i.ColorType,
+			&i.LocationID,
 		); err != nil {
 			return nil, err
 		}
@@ -219,7 +229,7 @@ SET status         = 'pending',
     decided_at     = NULL,
     updated_at     = now()
 WHERE id = $1 AND artist_id = $2
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id
 `
 
 type ReopenBookingRequestParams struct {
@@ -254,6 +264,8 @@ func (q *Queries) ReopenBookingRequest(ctx context.Context, arg ReopenBookingReq
 		&i.DecidedAt,
 		&i.Styles,
 		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
 	)
 	return i, err
 }
@@ -266,7 +278,7 @@ SET status                   = $1::text,
     decided_at               = now(),
     updated_at               = now()
 WHERE id = $4 AND artist_id = $5
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id
 `
 
 type UpdateBookingRequestStatusParams struct {
@@ -310,6 +322,8 @@ func (q *Queries) UpdateBookingRequestStatus(ctx context.Context, arg UpdateBook
 		&i.DecidedAt,
 		&i.Styles,
 		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
 	)
 	return i, err
 }
