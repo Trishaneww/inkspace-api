@@ -29,6 +29,7 @@ type Inquiry struct {
 	ColorType              string           `json:"colorType"`
 	LocationID             string           `json:"locationId,omitempty"`
 	Location               *InquiryLocation `json:"location"`
+	Flash                  *InquiryFlash    `json:"flash,omitempty"`
 	Styles                 []string         `json:"styles"`
 	ClientAvailability     json.RawMessage  `json:"clientAvailability"`
 	CustomAnswers          json.RawMessage  `json:"customAnswers"`
@@ -41,6 +42,13 @@ type Inquiry struct {
 	SessionDurationMinutes *int32           `json:"sessionDurationMinutes,omitempty"`
 	CreatedAt              string           `json:"createdAt"`
 	DecidedAt              *string          `json:"decidedAt,omitempty"`
+}
+
+// InquiryFlash is the claimed flash's display info, shown on a flash inquiry.
+type InquiryFlash struct {
+	Title     string   `json:"title"`
+	ImageURLs []string `json:"imageUrls"`
+	SizeCode  string   `json:"sizeCode,omitempty"`
 }
 
 type InquiryLocation struct {

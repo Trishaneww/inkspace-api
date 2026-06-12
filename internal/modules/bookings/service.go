@@ -109,10 +109,45 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 		}
 	}
 
-	return s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
+	inquiry, err := s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
 		Status:                 "accepted",
 		SessionDurationMinutes: input.SessionDurationMinutes,
 		DepositStatus:          &depositStatus,
+	})
+	if err != nil {
+		return Inquiry{}, err
+	}
+	if inquiry.Type == RequestTypeFlash && inquiry.FlashID != nil {
+		if err := s.claimFlash(ctx, artist.ID, inquiryID, *inquiry.FlashID); err != nil {
+			return Inquiry{}, err
+		}
+	}
+	return inquiry, nil
+}
+
+func (s *service) claimFlash(ctx context.Context, artistID, bookingID uuid.UUID, flashIDStr string) error {
+	flashID, err := uuid.Parse(flashIDStr)
+	if err != nil {
+		return nil
+	}
+	flash, err := s.repo.ClaimFlash(ctx, sqlc.ClaimFlashParams{
+		ID:                 flashID,
+		ClaimedByBookingID: pgtype.UUID{Bytes: bookingID, Valid: true},
+	})
+	if err != nil {
+		// Already claimed/unavailable — nothing more to do.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if flash.Repeatable {
+		return nil
+	}
+	return s.repo.DeclineOtherFlashRequests(ctx, sqlc.DeclineOtherFlashRequestsParams{
+		ArtistID:  artistID,
+		FlashID:   pgtype.UUID{Bytes: flashID, Valid: true},
+		ExcludeID: bookingID,
 	})
 }
 
@@ -164,6 +199,9 @@ func (s *service) enrichInquiry(ctx context.Context, row sqlc.BookingRequest) (I
 			}
 		}
 	}
+	if err := s.attachFlash(ctx, row, &inquiry); err != nil {
+		return Inquiry{}, err
+	}
 	if s.s3 == nil {
 		return inquiry, nil
 	}
@@ -175,6 +213,41 @@ func (s *service) enrichInquiry(ctx context.Context, row sqlc.BookingRequest) (I
 		inquiry.ReferenceImageURLs = append(inquiry.ReferenceImageURLs, url)
 	}
 	return inquiry, nil
+}
+
+// attachFlash hangs the claimed flash's title, images, and chosen size off a
+// flash inquiry so the inbox can show the design instead of reference photos.
+func (s *service) attachFlash(ctx context.Context, row sqlc.BookingRequest, inquiry *Inquiry) error {
+	if row.Type != string(RequestTypeFlash) || !row.FlashID.Valid {
+		return nil
+	}
+	flash, err := s.repo.GetFlash(ctx, uuid.UUID(row.FlashID.Bytes))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+
+	out := &InquiryFlash{
+		Title:     flash.Title,
+		ImageURLs: []string{},
+		SizeCode:  row.FlashSizeCode,
+	}
+	if s.s3 != nil {
+		for _, key := range []*string{flash.S3Key, flash.ReferenceS3Key} {
+			if key == nil || *key == "" {
+				continue
+			}
+			url, err := s.s3.PresignGet(ctx, *key, presignViewTTL)
+			if err != nil {
+				return fmt.Errorf("presign flash image: %w", err)
+			}
+			out.ImageURLs = append(out.ImageURLs, url)
+		}
+	}
+	inquiry.Flash = out
+	return nil
 }
 
 func (s *service) requireArtist(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error) {

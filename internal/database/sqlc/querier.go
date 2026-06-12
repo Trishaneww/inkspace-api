@@ -35,6 +35,9 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSessionPreset(ctx context.Context, arg CreateSessionPresetParams) (ArtistSessionPreset, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Once one request claims a flash, auto-decline the other pending requests
+	// competing for the same flash (used for non-repeatable flashes).
+	DeclineOtherFlashRequests(ctx context.Context, arg DeclineOtherFlashRequestsParams) error
 	DeleteAllAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error
 	DeleteAllFlashPricingTiers(ctx context.Context, flashID uuid.UUID) error
 	DeleteExpiredPhoneVerifications(ctx context.Context) (int64, error)
