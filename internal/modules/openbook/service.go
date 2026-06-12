@@ -114,8 +114,15 @@ func (s *service) GetProfile(ctx context.Context, slug string) (Profile, error) 
 	if err != nil {
 		return Profile{}, err
 	}
+	availableFlashes, err := s.repo.CountAvailableFlashes(ctx, b.artist.ID)
+	if err != nil {
+		return Profile{}, err
+	}
 
-	return s.buildProfile(ctx, b.user, b.settings, b.openBook, windows, locations), nil
+	profile := s.buildProfile(ctx, b.user, b.settings, b.openBook, windows, locations)
+	profile.ArtistID = b.artist.ID.String()
+	profile.HasFlashes = availableFlashes > 0
+	return profile, nil
 }
 
 func (s *service) PresignReferenceUpload(ctx context.Context, slug, contentType string) (PresignReferenceResult, error) {
@@ -154,7 +161,12 @@ func (s *service) CreateRequest(ctx context.Context, slug string, input CreateRe
 		return CreateRequestResult{}, ErrNotAccepting
 	}
 
-	params, err := buildCreateParams(b, input)
+	var params sqlc.CreateBookingRequestParams
+	if input.FlashID != nil && strings.TrimSpace(*input.FlashID) != "" {
+		params, err = s.buildFlashRequestParams(ctx, b, input)
+	} else {
+		params, err = buildCustomRequestParams(b, input)
+	}
 	if err != nil {
 		return CreateRequestResult{}, err
 	}
@@ -183,20 +195,30 @@ func (s *service) CreateRequest(ctx context.Context, slug string, input CreateRe
 	}, nil
 }
 
-func buildCreateParams(b bookable, input CreateRequestInput) (sqlc.CreateBookingRequestParams, error) {
+// validateContact pulls the shared guest contact fields, required for every
+// request regardless of type.
+func validateContact(input CreateRequestInput) (name, email, phone string, err error) {
+	name = strings.TrimSpace(input.ClientName)
+	if name == "" {
+		return "", "", "", fmt.Errorf("%w: your name is required", ErrInvalidInput)
+	}
+	email = strings.TrimSpace(input.ClientEmail)
+	if _, err := mail.ParseAddress(email); err != nil {
+		return "", "", "", fmt.Errorf("%w: a valid email is required", ErrInvalidInput)
+	}
+	phone = strings.TrimSpace(input.ClientPhone)
+	if phone == "" {
+		return "", "", "", fmt.Errorf("%w: a phone number is required", ErrInvalidInput)
+	}
+	return name, email, phone, nil
+}
+
+func buildCustomRequestParams(b bookable, input CreateRequestInput) (sqlc.CreateBookingRequestParams, error) {
 	var empty sqlc.CreateBookingRequestParams
 
-	name := strings.TrimSpace(input.ClientName)
-	if name == "" {
-		return empty, fmt.Errorf("%w: your name is required", ErrInvalidInput)
-	}
-	email := strings.TrimSpace(input.ClientEmail)
-	if _, err := mail.ParseAddress(email); err != nil {
-		return empty, fmt.Errorf("%w: a valid email is required", ErrInvalidInput)
-	}
-	phone := strings.TrimSpace(input.ClientPhone)
-	if phone == "" {
-		return empty, fmt.Errorf("%w: a phone number is required", ErrInvalidInput)
+	name, email, phone, err := validateContact(input)
+	if err != nil {
+		return empty, err
 	}
 	description := strings.TrimSpace(input.Description)
 	if description == "" {
@@ -254,6 +276,124 @@ func buildCreateParams(b bookable, input CreateRequestInput) (sqlc.CreateBooking
 		WaiverStatus:       waiverStatus,
 	}
 	return params, nil
+}
+
+// buildFlashRequestParams builds a booking request that claims a specific flash.
+// The design (color, styles) comes from the flash; the client only chooses size,
+// placement, and location, so most custom fields are left empty.
+func (s *service) buildFlashRequestParams(ctx context.Context, b bookable, input CreateRequestInput) (sqlc.CreateBookingRequestParams, error) {
+	var empty sqlc.CreateBookingRequestParams
+
+	name, email, phone, err := validateContact(input)
+	if err != nil {
+		return empty, err
+	}
+
+	flashID, err := uuid.Parse(strings.TrimSpace(*input.FlashID))
+	if err != nil {
+		return empty, fmt.Errorf("%w: invalid flash", ErrInvalidInput)
+	}
+	flash, err := s.repo.GetFlash(ctx, flashID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return empty, fmt.Errorf("%w: that flash isn't available", ErrInvalidInput)
+		}
+		return empty, err
+	}
+	if flash.ArtistID != b.artist.ID || flash.Status != "available" {
+		return empty, fmt.Errorf("%w: that flash isn't available", ErrInvalidInput)
+	}
+
+	placement := strings.TrimSpace(input.Placement)
+	if placement == "" {
+		return empty, fmt.Errorf("%w: choose a placement", ErrInvalidInput)
+	}
+	if len(flash.Placements) > 0 && !containsString(flash.Placements, placement) {
+		return empty, fmt.Errorf("%w: that placement isn't offered for this flash", ErrInvalidInput)
+	}
+
+	duration, err := s.resolveFlashDuration(ctx, flash, input.SizeCode)
+	if err != nil {
+		return empty, err
+	}
+
+	answersJSON, err := json.Marshal(cleanAnswers(input.CustomAnswers))
+	if err != nil {
+		return empty, err
+	}
+	availabilityJSON, err := json.Marshal(cleanAvailability(input.ClientAvailability))
+	if err != nil {
+		return empty, err
+	}
+
+	waiverStatus := "not_required"
+	if b.settings.WaiverRequired {
+		waiverStatus = "pending"
+	}
+
+	styles := flash.Styles
+	if styles == nil {
+		styles = []string{}
+	}
+
+	return sqlc.CreateBookingRequestParams{
+		ArtistID:               b.artist.ID,
+		OpenBookID:             b.openBook.ID,
+		Type:                   "flash",
+		FlashID:                pgUUID(flashID),
+		Description:            "",
+		ReferenceImageKeys:     []string{},
+		Placement:              placement,
+		ColorType:              normalizeFlashColorType(flash.ColorType),
+		Styles:                 styles,
+		ClientAvailability:     availabilityJSON,
+		CustomAnswers:          answersJSON,
+		ClientName:             name,
+		ClientEmail:            email,
+		ClientPhone:            phone,
+		Status:                 "pending",
+		DepositStatus:          "not_required",
+		WaiverStatus:           waiverStatus,
+		SessionDurationMinutes: duration,
+		FlashSizeCode:          strings.TrimSpace(input.SizeCode),
+	}, nil
+}
+
+func (s *service) resolveFlashDuration(ctx context.Context, flash sqlc.Flash, sizeCode string) (*int32, error) {
+	if flash.PricingMode == "flat" {
+		return flash.FlatDurationMinutes, nil
+	}
+	code := strings.TrimSpace(sizeCode)
+	if code == "" {
+		return nil, fmt.Errorf("%w: choose a size", ErrInvalidInput)
+	}
+	tiers, err := s.repo.ListFlashPricingTiers(ctx, flash.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range tiers {
+		if t.SizeCode == code {
+			duration := t.DurationMinutes
+			return &duration, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: that size isn't offered for this flash", ErrInvalidInput)
+}
+
+func normalizeFlashColorType(colorType string) string {
+	if colorType == "both" {
+		return "either"
+	}
+	return colorType
+}
+
+func containsString(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+	return false
 }
 
 func validateStyles(selected, offered []string) ([]string, error) {

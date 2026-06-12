@@ -2,6 +2,7 @@ package openbook
 
 type Profile struct {
 	Username          string               `json:"username"`
+	ArtistID          string               `json:"artistId"`
 	DisplayName       string               `json:"displayName"`
 	AvatarURL         string               `json:"avatarUrl"`
 	Location          string               `json:"location"`
@@ -13,7 +14,8 @@ type Profile struct {
 	Aftercare         string               `json:"aftercare"`
 	FAQs              []FAQItem            `json:"faqs"`
 	Availability      []AvailabilityWindow `json:"availability"`
-	Locations []PublicLocation `json:"locations"`
+	Locations         []PublicLocation     `json:"locations"`
+	HasFlashes        bool                 `json:"hasFlashes"`
 }
 
 type PublicLocation struct {
@@ -61,6 +63,8 @@ type AvailabilityChoice struct {
 
 type CreateRequestInput struct {
 	LocationID         string               `json:"locationId"`
+	FlashID            *string              `json:"flashId"`
+	SizeCode           string               `json:"sizeCode"`
 	Description        string               `json:"description"`
 	ReferenceImageKeys []string             `json:"referenceImageKeys"`
 	Placement          string               `json:"placement"`

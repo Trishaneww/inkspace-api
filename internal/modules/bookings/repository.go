@@ -25,6 +25,9 @@ type Repository interface {
 	GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error)
 	UpdateBookingRequestStatus(ctx context.Context, params sqlc.UpdateBookingRequestStatusParams) (sqlc.BookingRequest, error)
 	ReopenBookingRequest(ctx context.Context, params sqlc.ReopenBookingRequestParams) (sqlc.BookingRequest, error)
+	GetFlash(ctx context.Context, flashID uuid.UUID) (sqlc.Flash, error)
+	ClaimFlash(ctx context.Context, params sqlc.ClaimFlashParams) (sqlc.Flash, error)
+	DeclineOtherFlashRequests(ctx context.Context, params sqlc.DeclineOtherFlashRequestsParams) error
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (sqlc.GetBookingStatsRow, error)
 }
 
@@ -83,4 +86,16 @@ func (r *repository) ReopenBookingRequest(ctx context.Context, params sqlc.Reope
 
 func (r *repository) GetBookingStats(ctx context.Context, artistID uuid.UUID) (sqlc.GetBookingStatsRow, error) {
 	return r.q.GetBookingStats(ctx, artistID)
+}
+
+func (r *repository) GetFlash(ctx context.Context, flashID uuid.UUID) (sqlc.Flash, error) {
+	return r.q.GetFlash(ctx, flashID)
+}
+
+func (r *repository) ClaimFlash(ctx context.Context, params sqlc.ClaimFlashParams) (sqlc.Flash, error) {
+	return r.q.ClaimFlash(ctx, params)
+}
+
+func (r *repository) DeclineOtherFlashRequests(ctx context.Context, params sqlc.DeclineOtherFlashRequestsParams) error {
+	return r.q.DeclineOtherFlashRequests(ctx, params)
 }

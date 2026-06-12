@@ -133,6 +133,7 @@ type BookingRequest struct {
 	CustomAnswers          []byte             `json:"custom_answers"`
 	ColorType              string             `json:"color_type"`
 	LocationID             pgtype.UUID        `json:"location_id"`
+	FlashSizeCode          string             `json:"flash_size_code"`
 }
 
 type Flash struct {
