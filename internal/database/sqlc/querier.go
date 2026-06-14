@@ -24,7 +24,12 @@ type Querier interface {
 	CloseArtistLocation(ctx context.Context, arg CloseArtistLocationParams) error
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
+	// Counts the artist's live, time-locked appointments whose [start, start+duration)
+	// window overlaps the proposed one — used to block double-booking. Proposed
+	// client-scheduled slots (NULL start) and cancelled/no-show slots never conflict.
+	CountOverlappingAppointments(ctx context.Context, arg CountOverlappingAppointmentsParams) (int64, error)
 	CountPortfolioItemsByArtist(ctx context.Context, arg CountPortfolioItemsByArtistParams) (CountPortfolioItemsByArtistRow, error)
+	CreateAppointment(ctx context.Context, arg CreateAppointmentParams) (Appointment, error)
 	CreateArtistLocation(ctx context.Context, arg CreateArtistLocationParams) (ArtistLocation, error)
 	CreateAvailabilityWindow(ctx context.Context, arg CreateAvailabilityWindowParams) (ArtistAvailabilityWindow, error)
 	CreateBookingRequest(ctx context.Context, arg CreateBookingRequestParams) (BookingRequest, error)
@@ -59,6 +64,7 @@ type Querier interface {
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
+	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
 	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
 	GetPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
@@ -84,6 +90,9 @@ type Querier interface {
 	// Ordered by flash so callers can group sequentially, then by size.
 	ListFlashPricingTiersForFlashes(ctx context.Context, flashIds []uuid.UUID) ([]FlashPricingTier, error)
 	ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error)
+	// The most recent appointment per request, so the inbox list can show the
+	// scheduled/proposed state without an N+1 lookup.
+	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]Appointment, error)
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
@@ -103,6 +112,7 @@ type Querier interface {
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
+	UpdateAppointmentSchedule(ctx context.Context, arg UpdateAppointmentScheduleParams) (Appointment, error)
 	UpdateArtistLocation(ctx context.Context, arg UpdateArtistLocationParams) (ArtistLocation, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)

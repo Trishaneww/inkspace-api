@@ -11,6 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Appointment struct {
+	ID               uuid.UUID          `json:"id"`
+	ArtistID         uuid.UUID          `json:"artist_id"`
+	BookingRequestID uuid.UUID          `json:"booking_request_id"`
+	Type             string             `json:"type"`
+	Status           string             `json:"status"`
+	ScheduledStart   pgtype.Timestamptz `json:"scheduled_start"`
+	DurationMinutes  int32              `json:"duration_minutes"`
+	Format           *string            `json:"format"`
+	SchedulingOrigin string             `json:"scheduling_origin"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Artist struct {
 	ID          uuid.UUID          `json:"id"`
 	UserID      uuid.UUID          `json:"user_id"`
