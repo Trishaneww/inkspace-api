@@ -17,6 +17,32 @@ const (
 	RequestTypeCustom RequestType = "custom"
 )
 
+// AppointmentType distinguishes the two scheduled outcomes that ride the same
+// scheduling rails: an optional pre-booking consultation and the tattoo session.
+type AppointmentType string
+
+const (
+	AppointmentConsultation AppointmentType = "consultation"
+	AppointmentSession      AppointmentType = "session"
+)
+
+// Scheduling-mode and appointment string values, kept verbatim with the DB
+// CHECK constraints (open_books.scheduling_mode, appointments.*).
+const (
+	schedulingArtist = "artist_scheduled"
+
+	appointmentProposed  = "proposed"
+	appointmentScheduled = "scheduled"
+
+	originArtistSet    = "artist_set"
+	originClientBooked = "client_booked"
+
+	// Defaults applied when a consultation is requested without an explicit
+	// length or format (consultations are configured per request, not in settings).
+	defaultConsultationDurationMinutes int32 = 30
+	defaultConsultationFormat                = "in_person"
+)
+
 type Inquiry struct {
 	ID                     string           `json:"id"`
 	Type                   RequestType      `json:"type"`
@@ -42,6 +68,34 @@ type Inquiry struct {
 	SessionDurationMinutes *int32           `json:"sessionDurationMinutes,omitempty"`
 	CreatedAt              string           `json:"createdAt"`
 	DecidedAt              *string          `json:"decidedAt,omitempty"`
+
+	// Scheduling context the inbox needs to drive the accept / consultation
+	// actions: how this artist schedules, their weekly hours (so the time picker
+	// can surface "your hours" first), and the appointment produced once the
+	// request is accepted or a consult is requested.
+	SchedulingMode     string               `json:"schedulingMode"`
+	ArtistAvailability []AvailabilityWindow `json:"artistAvailability"`
+	Appointment        *Appointment         `json:"appointment,omitempty"`
+}
+
+// AvailabilityWindow is one of the artist's recurring weekly working spans,
+// surfaced so the scheduling UI can group "your hours" ahead of off-hours.
+type AvailabilityWindow struct {
+	Weekday     int32 `json:"weekday"`
+	StartMinute int32 `json:"startMinute"`
+	EndMinute   int32 `json:"endMinute"`
+}
+
+// Appointment is the scheduled outcome of an inquiry — a consultation or the
+// session itself, placed by the artist or awaiting the client's self-booking.
+type Appointment struct {
+	ID               string  `json:"id"`
+	Type             string  `json:"type"`
+	Status           string  `json:"status"`
+	ScheduledStart   *string `json:"scheduledStart,omitempty"`
+	DurationMinutes  int32   `json:"durationMinutes"`
+	Format           *string `json:"format,omitempty"`
+	SchedulingOrigin string  `json:"schedulingOrigin"`
 }
 
 // InquiryFlash is the claimed flash's display info, shown on a flash inquiry.
@@ -73,8 +127,33 @@ type InquiryListResponse struct {
 }
 
 // ── Request payloads ─────────────────────────────────────────────────────────
+
+// AcceptInput accepts an inquiry and schedules the session. The artist supplies
+// the session length in both modes; ScheduledStart is required for
+// artist_scheduled (the artist places them) and ignored for client_scheduled
+// (the client picks their own start later).
 type AcceptInput struct {
-	SessionDurationMinutes *int32 `json:"sessionDurationMinutes"`
+	SessionDurationMinutes *int32     `json:"sessionDurationMinutes"`
+	ScheduledStart         *time.Time `json:"scheduledStart"`
+}
+
+// RequestConsultationInput requests a consultation before accepting. Length and
+// format are chosen per request (defaulting to 30 minutes / in person);
+// ScheduledStart is the proposed time for artist_scheduled and omitted for
+// client_scheduled.
+type RequestConsultationInput struct {
+	ScheduledStart  *time.Time `json:"scheduledStart"`
+	DurationMinutes *int32     `json:"durationMinutes"`
+	Format          *string    `json:"format"`
+}
+
+// RescheduleInput moves an already-scheduled appointment to a new time. A
+// session may resize via DurationMinutes; a consultation may also re-pick its
+// length and Format. Omitted fields are kept as-is.
+type RescheduleInput struct {
+	ScheduledStart  *time.Time `json:"scheduledStart"`
+	DurationMinutes *int32     `json:"durationMinutes"`
+	Format          *string    `json:"format"`
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────
@@ -102,6 +181,7 @@ func inquiryFromRow(row sqlc.BookingRequest) Inquiry {
 		out.ReferenceImageKeys = []string{}
 	}
 	out.ReferenceImageURLs = []string{}
+	out.ArtistAvailability = []AvailabilityWindow{}
 	if out.Styles == nil {
 		out.Styles = []string{}
 	}
@@ -135,6 +215,34 @@ func inquiryLocationFromRow(l sqlc.ArtistLocation) *InquiryLocation {
 	if l.EndDate.Valid {
 		s := l.EndDate.Time.Format("2006-01-02")
 		out.EndDate = &s
+	}
+	return out
+}
+
+func availabilityWindowsFromRows(rows []sqlc.ArtistAvailabilityWindow) []AvailabilityWindow {
+	out := make([]AvailabilityWindow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, AvailabilityWindow{
+			Weekday:     r.Weekday,
+			StartMinute: r.StartMinute,
+			EndMinute:   r.EndMinute,
+		})
+	}
+	return out
+}
+
+func appointmentFromRow(a sqlc.Appointment) *Appointment {
+	out := &Appointment{
+		ID:               a.ID.String(),
+		Type:             a.Type,
+		Status:           a.Status,
+		DurationMinutes:  a.DurationMinutes,
+		Format:           a.Format,
+		SchedulingOrigin: a.SchedulingOrigin,
+	}
+	if a.ScheduledStart.Valid {
+		s := a.ScheduledStart.Time.UTC().Format(time.RFC3339)
+		out.ScheduledStart = &s
 	}
 	return out
 }

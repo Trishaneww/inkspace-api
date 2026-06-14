@@ -318,9 +318,6 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 		return OnboardingResponse{}, fmt.Errorf("%w: schedulingMode must be artist_scheduled or client_scheduled", ErrInvalidInput)
 	}
 
-	if len(input.Styles) == 0 {
-		return OnboardingResponse{}, fmt.Errorf("%w: select at least one style", ErrInvalidInput)
-	}
 	if !allValidStyles(input.Styles) {
 		return OnboardingResponse{}, fmt.Errorf("%w: unknown tattoo style", ErrInvalidInput)
 	}
@@ -603,9 +600,6 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 		params.SlotIntervalMinutes = input.SlotIntervalMinutes
 	}
 	if input.Styles != nil {
-		if len(*input.Styles) == 0 {
-			return ArtistSettings{}, fmt.Errorf("%w: select at least one style", ErrInvalidInput)
-		}
 		if !allValidStyles(*input.Styles) {
 			return ArtistSettings{}, fmt.Errorf("%w: unknown tattoo style", ErrInvalidInput)
 		}
@@ -833,7 +827,6 @@ func (s *service) SetCurrentLocation(ctx context.Context, userID uuid.UUID, inpu
 		CurrentLocationID: pgUUID(locationID),
 	})
 }
-
 
 func overlapsAnyGuestSpot(start, end time.Time, locations []sqlc.ArtistLocation, excludeID uuid.UUID) bool {
 	for _, l := range locations {

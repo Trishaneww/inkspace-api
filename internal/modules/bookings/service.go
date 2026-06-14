@@ -18,14 +18,18 @@ import (
 const presignViewTTL = 1 * time.Hour
 
 var (
-	ErrNotFound   = errors.New("inquiry not found")
-	ErrNoOpenBook = errors.New("artist has no open book")
+	ErrNotFound         = errors.New("inquiry not found")
+	ErrNoOpenBook       = errors.New("artist has no open book")
+	ErrInvalidSchedule  = errors.New("invalid schedule: a session length is required, and a start time is required when you schedule clients yourself")
+	ErrScheduleConflict = errors.New("that time overlaps an appointment you've already scheduled")
 )
 
 type Service interface {
 	ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryListResponse, error)
 	GetInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID, input AcceptInput) (Inquiry, error)
+	RequestConsultation(ctx context.Context, userID, inquiryID uuid.UUID, input RequestConsultationInput) (Inquiry, error)
+	RescheduleAppointment(ctx context.Context, userID, inquiryID uuid.UUID, input RescheduleInput) (Inquiry, error)
 	DeclineInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	ReopenInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, error)
@@ -60,7 +64,27 @@ func (s *service) ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryL
 		inquiries = append(inquiries, inquiryFromRow(row))
 	}
 	s.attachLocations(ctx, artist.ID, inquiries)
+	s.attachAppointments(ctx, artist.ID, inquiries)
 	return InquiryListResponse{Inquiries: inquiries, Stats: statsFromRow(statsRow)}, nil
+}
+
+// attachAppointments hangs the latest appointment off each list inquiry so the
+// inbox can distinguish a scheduled booking from one still proposed (awaiting
+// the client's self-booking).
+func (s *service) attachAppointments(ctx context.Context, artistID uuid.UUID, inquiries []Inquiry) {
+	appointments, err := s.repo.ListLatestAppointmentsByArtist(ctx, artistID)
+	if err != nil || len(appointments) == 0 {
+		return
+	}
+	byRequest := make(map[string]sqlc.Appointment, len(appointments))
+	for _, a := range appointments {
+		byRequest[a.BookingRequestID.String()] = a
+	}
+	for i := range inquiries {
+		if a, ok := byRequest[inquiries[i].ID]; ok {
+			inquiries[i].Appointment = appointmentFromRow(a)
+		}
+	}
 }
 
 func (s *service) attachLocations(ctx context.Context, artistID uuid.UUID, inquiries []Inquiry) {
@@ -99,19 +123,39 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 	if err != nil {
 		return Inquiry{}, err
 	}
-
-	depositStatus := "not_required"
-	if err := s.repo.EnsureArtistSettings(ctx, artist.ID); err == nil {
-		if settings, err := s.repo.GetArtistSettings(ctx, artist.ID); err == nil {
-			if settings.DepositFlatFeeCents != nil && *settings.DepositFlatFeeCents > 0 {
-				depositStatus = "pending"
-			}
-		}
+	book, err := s.requireOpenBook(ctx, artist.ID)
+	if err != nil {
+		return Inquiry{}, err
 	}
 
+	duration := int32Value(input.SessionDurationMinutes)
+	if duration <= 0 {
+		return Inquiry{}, ErrInvalidSchedule
+	}
+	apptStatus, origin, start, err := resolveSchedule(book.SchedulingMode, input.ScheduledStart)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	if err := s.assertNoConflict(ctx, artist.ID, inquiryID, start, duration); err != nil {
+		return Inquiry{}, err
+	}
+
+	if _, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+		ArtistID:         artist.ID,
+		BookingRequestID: inquiryID,
+		Type:             string(AppointmentSession),
+		Status:           apptStatus,
+		ScheduledStart:   start,
+		DurationMinutes:  duration,
+		SchedulingOrigin: origin,
+	}); err != nil {
+		return Inquiry{}, err
+	}
+
+	depositStatus := s.resolveDepositStatus(ctx, artist.ID)
 	inquiry, err := s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
 		Status:                 "accepted",
-		SessionDurationMinutes: input.SessionDurationMinutes,
+		SessionDurationMinutes: &duration,
 		DepositStatus:          &depositStatus,
 	})
 	if err != nil {
@@ -123,6 +167,191 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 		}
 	}
 	return inquiry, nil
+}
+
+func (s *service) RequestConsultation(ctx context.Context, userID, inquiryID uuid.UUID, input RequestConsultationInput) (Inquiry, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	book, err := s.requireOpenBook(ctx, artist.ID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	duration := defaultConsultationDurationMinutes
+	if input.DurationMinutes != nil && *input.DurationMinutes > 0 {
+		duration = *input.DurationMinutes
+	}
+	format := defaultConsultationFormat
+	if input.Format != nil && *input.Format != "" {
+		format = *input.Format
+	}
+	if !validFormat(format) {
+		return Inquiry{}, ErrInvalidSchedule
+	}
+
+	apptStatus, origin, start, err := resolveSchedule(book.SchedulingMode, input.ScheduledStart)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	if err := s.assertNoConflict(ctx, artist.ID, inquiryID, start, duration); err != nil {
+		return Inquiry{}, err
+	}
+
+	if _, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+		ArtistID:         artist.ID,
+		BookingRequestID: inquiryID,
+		Type:             string(AppointmentConsultation),
+		Status:           apptStatus,
+		ScheduledStart:   start,
+		DurationMinutes:  duration,
+		Format:           &format,
+		SchedulingOrigin: origin,
+	}); err != nil {
+		return Inquiry{}, err
+	}
+
+	return s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
+		Status: "consultation_requested",
+	})
+}
+
+func (s *service) RescheduleAppointment(ctx context.Context, userID, inquiryID uuid.UUID, input RescheduleInput) (Inquiry, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	if input.ScheduledStart == nil {
+		return Inquiry{}, ErrInvalidSchedule
+	}
+	if input.Format != nil && *input.Format != "" && !validFormat(*input.Format) {
+		return Inquiry{}, ErrInvalidSchedule
+	}
+
+	appt, err := s.repo.GetLatestAppointmentByRequest(ctx, inquiryID)
+	hasAppointment := err == nil
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Inquiry{}, err
+	}
+	if hasAppointment && appt.ArtistID != artist.ID {
+		return Inquiry{}, ErrNotFound
+	}
+
+	duration := int32Value(input.DurationMinutes)
+	if duration <= 0 {
+		if !hasAppointment {
+			return Inquiry{}, ErrInvalidSchedule
+		}
+		duration = appt.DurationMinutes
+	}
+
+	start := pgtype.Timestamptz{Time: *input.ScheduledStart, Valid: true}
+	if err := s.assertNoConflict(ctx, artist.ID, inquiryID, start, duration); err != nil {
+		return Inquiry{}, err
+	}
+
+	if hasAppointment {
+		if _, err := s.repo.UpdateAppointmentSchedule(ctx, sqlc.UpdateAppointmentScheduleParams{
+			ID:              appt.ID,
+			ArtistID:        artist.ID,
+			ScheduledStart:  start,
+			DurationMinutes: input.DurationMinutes,
+			Format:          input.Format,
+		}); err != nil {
+			return Inquiry{}, err
+		}
+	} else if _, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+		ArtistID:         artist.ID,
+		BookingRequestID: inquiryID,
+		Type:             string(AppointmentSession),
+		Status:           appointmentScheduled,
+		ScheduledStart:   start,
+		DurationMinutes:  duration,
+		SchedulingOrigin: originArtistSet,
+	}); err != nil {
+		return Inquiry{}, err
+	}
+
+	return s.GetInquiry(ctx, userID, inquiryID)
+}
+
+// resolveSchedule maps the artist's scheduling mode to the appointment's
+// initial status, origin, and (when the artist places it) start time.
+func resolveSchedule(mode string, start *time.Time) (status, origin string, scheduledStart pgtype.Timestamptz, err error) {
+	if mode == schedulingArtist {
+		if start == nil {
+			return "", "", pgtype.Timestamptz{}, ErrInvalidSchedule
+		}
+		return appointmentScheduled, originArtistSet, pgtype.Timestamptz{Time: *start, Valid: true}, nil
+	}
+	// client_scheduled: the client self-books a start later, so it stays proposed.
+	return appointmentProposed, originClientBooked, pgtype.Timestamptz{}, nil
+}
+
+// assertNoConflict blocks placing an appointment whose window overlaps one the
+// artist already has scheduled. Client-scheduled slots have no start yet, so
+// there is nothing to conflict with. The request's own appointments are excluded
+// (e.g. accepting a session after its consultation was scheduled).
+func (s *service) assertNoConflict(ctx context.Context, artistID, requestID uuid.UUID, start pgtype.Timestamptz, durationMinutes int32) error {
+	if !start.Valid {
+		return nil
+	}
+	windowEnd := pgtype.Timestamptz{
+		Time:  start.Time.Add(time.Duration(durationMinutes) * time.Minute),
+		Valid: true,
+	}
+	count, err := s.repo.CountOverlappingAppointments(ctx, sqlc.CountOverlappingAppointmentsParams{
+		ArtistID:         artistID,
+		ExcludeRequestID: requestID,
+		WindowStart:      start,
+		WindowEnd:        windowEnd,
+	})
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrScheduleConflict
+	}
+	return nil
+}
+
+func validFormat(format string) bool {
+	switch format {
+	case "in_person", "online", "phone":
+		return true
+	default:
+		return false
+	}
+}
+
+func int32Value(p *int32) int32 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func (s *service) requireOpenBook(ctx context.Context, artistID uuid.UUID) (sqlc.OpenBook, error) {
+	book, err := s.repo.GetOpenBookByArtist(ctx, artistID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return sqlc.OpenBook{}, ErrNoOpenBook
+		}
+		return sqlc.OpenBook{}, err
+	}
+	return book, nil
+}
+
+func (s *service) resolveDepositStatus(ctx context.Context, artistID uuid.UUID) string {
+	if err := s.repo.EnsureArtistSettings(ctx, artistID); err == nil {
+		if settings, err := s.repo.GetArtistSettings(ctx, artistID); err == nil {
+			if settings.DepositFlatFeeCents != nil && *settings.DepositFlatFeeCents > 0 {
+				return "pending"
+			}
+		}
+	}
+	return "not_required"
 }
 
 func (s *service) claimFlash(ctx context.Context, artistID, bookingID uuid.UUID, flashIDStr string) error {
@@ -202,6 +431,9 @@ func (s *service) enrichInquiry(ctx context.Context, row sqlc.BookingRequest) (I
 	if err := s.attachFlash(ctx, row, &inquiry); err != nil {
 		return Inquiry{}, err
 	}
+	if err := s.attachSchedulingContext(ctx, row, &inquiry); err != nil {
+		return Inquiry{}, err
+	}
 	if s.s3 == nil {
 		return inquiry, nil
 	}
@@ -213,6 +445,31 @@ func (s *service) enrichInquiry(ctx context.Context, row sqlc.BookingRequest) (I
 		inquiry.ReferenceImageURLs = append(inquiry.ReferenceImageURLs, url)
 	}
 	return inquiry, nil
+}
+
+// attachSchedulingContext hangs the artist's scheduling mode, consultation
+// policy, and the request's latest appointment off the inquiry so the inbox can
+// drive the accept / consultation actions and show the scheduled outcome.
+func (s *service) attachSchedulingContext(ctx context.Context, row sqlc.BookingRequest, inquiry *Inquiry) error {
+	if book, err := s.repo.GetOpenBookByArtist(ctx, row.ArtistID); err == nil {
+		inquiry.SchedulingMode = book.SchedulingMode
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+
+	if windows, err := s.repo.ListAvailabilityWindows(ctx, row.ArtistID); err == nil {
+		inquiry.ArtistAvailability = availabilityWindowsFromRows(windows)
+	}
+
+	appt, err := s.repo.GetLatestAppointmentByRequest(ctx, row.ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	inquiry.Appointment = appointmentFromRow(appt)
+	return nil
 }
 
 // attachFlash hangs the claimed flash's title, images, and chosen size off a

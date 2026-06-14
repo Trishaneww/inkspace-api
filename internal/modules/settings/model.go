@@ -210,8 +210,9 @@ type UpdateSettingsInput struct {
 	WaiverRequired      *bool      `json:"waiverRequired"`
 	Aftercare           *string    `json:"aftercare"`
 	FAQs                *[]FAQItem `json:"faqs"`
-	NotifyByEmail       *bool      `json:"notifyByEmail"`
-	NotifyBySMS         *bool      `json:"notifyBySms"`
+
+	NotifyByEmail *bool `json:"notifyByEmail"`
+	NotifyBySMS   *bool `json:"notifyBySms"`
 
 	DepositFlatFeeCents *int64  `json:"depositFlatFeeCents"`
 	ClearDepositFlatFee bool    `json:"clearDepositFlatFee"`

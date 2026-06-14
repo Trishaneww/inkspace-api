@@ -19,6 +19,7 @@ type Repository interface {
 	// Includes closed spots so a request can resolve the location it was tagged
 	// with even after the artist closes it.
 	ListAllArtistLocations(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistLocation, error)
+	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistAvailabilityWindow, error)
 
 	CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.BookingRequest, error)
@@ -29,6 +30,12 @@ type Repository interface {
 	ClaimFlash(ctx context.Context, params sqlc.ClaimFlashParams) (sqlc.Flash, error)
 	DeclineOtherFlashRequests(ctx context.Context, params sqlc.DeclineOtherFlashRequestsParams) error
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (sqlc.GetBookingStatsRow, error)
+
+	CreateAppointment(ctx context.Context, params sqlc.CreateAppointmentParams) (sqlc.Appointment, error)
+	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (sqlc.Appointment, error)
+	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.Appointment, error)
+	UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error)
+	CountOverlappingAppointments(ctx context.Context, params sqlc.CountOverlappingAppointmentsParams) (int64, error)
 }
 
 type repository struct {
@@ -64,6 +71,10 @@ func (r *repository) ListAllArtistLocations(ctx context.Context, artistID uuid.U
 	return r.q.ListAllArtistLocations(ctx, artistID)
 }
 
+func (r *repository) ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistAvailabilityWindow, error) {
+	return r.q.ListAvailabilityWindows(ctx, artistID)
+}
+
 func (r *repository) CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error) {
 	return r.q.CreateBookingRequest(ctx, params)
 }
@@ -86,6 +97,26 @@ func (r *repository) ReopenBookingRequest(ctx context.Context, params sqlc.Reope
 
 func (r *repository) GetBookingStats(ctx context.Context, artistID uuid.UUID) (sqlc.GetBookingStatsRow, error) {
 	return r.q.GetBookingStats(ctx, artistID)
+}
+
+func (r *repository) CreateAppointment(ctx context.Context, params sqlc.CreateAppointmentParams) (sqlc.Appointment, error) {
+	return r.q.CreateAppointment(ctx, params)
+}
+
+func (r *repository) GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (sqlc.Appointment, error) {
+	return r.q.GetLatestAppointmentByRequest(ctx, bookingRequestID)
+}
+
+func (r *repository) ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.Appointment, error) {
+	return r.q.ListLatestAppointmentsByArtist(ctx, artistID)
+}
+
+func (r *repository) UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error) {
+	return r.q.UpdateAppointmentSchedule(ctx, params)
+}
+
+func (r *repository) CountOverlappingAppointments(ctx context.Context, params sqlc.CountOverlappingAppointmentsParams) (int64, error) {
+	return r.q.CountOverlappingAppointments(ctx, params)
 }
 
 func (r *repository) GetFlash(ctx context.Context, flashID uuid.UUID) (sqlc.Flash, error) {
