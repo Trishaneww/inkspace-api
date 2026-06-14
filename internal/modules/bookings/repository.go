@@ -33,8 +33,11 @@ type Repository interface {
 
 	CreateAppointment(ctx context.Context, params sqlc.CreateAppointmentParams) (sqlc.Appointment, error)
 	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (sqlc.Appointment, error)
+	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.Appointment, error)
 	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.Appointment, error)
 	UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error)
+	UpdateAppointmentStatus(ctx context.Context, params sqlc.UpdateAppointmentStatusParams) (sqlc.Appointment, error)
+	SetAppointmentCalendarEvent(ctx context.Context, params sqlc.SetAppointmentCalendarEventParams) error
 	CountOverlappingAppointments(ctx context.Context, params sqlc.CountOverlappingAppointmentsParams) (int64, error)
 }
 
@@ -107,12 +110,24 @@ func (r *repository) GetLatestAppointmentByRequest(ctx context.Context, bookingR
 	return r.q.GetLatestAppointmentByRequest(ctx, bookingRequestID)
 }
 
+func (r *repository) ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.Appointment, error) {
+	return r.q.ListLiveAppointmentsByRequest(ctx, bookingRequestID)
+}
+
 func (r *repository) ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.Appointment, error) {
 	return r.q.ListLatestAppointmentsByArtist(ctx, artistID)
 }
 
 func (r *repository) UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error) {
 	return r.q.UpdateAppointmentSchedule(ctx, params)
+}
+
+func (r *repository) UpdateAppointmentStatus(ctx context.Context, params sqlc.UpdateAppointmentStatusParams) (sqlc.Appointment, error) {
+	return r.q.UpdateAppointmentStatus(ctx, params)
+}
+
+func (r *repository) SetAppointmentCalendarEvent(ctx context.Context, params sqlc.SetAppointmentCalendarEventParams) error {
+	return r.q.SetAppointmentCalendarEvent(ctx, params)
 }
 
 func (r *repository) CountOverlappingAppointments(ctx context.Context, params sqlc.CountOverlappingAppointmentsParams) (int64, error) {

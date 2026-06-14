@@ -64,6 +64,8 @@ type Querier interface {
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
+	// The request's "current" appointment: a live (scheduled/proposed) one if any,
+	// otherwise the most recent overall (so cancelled ones still surface for history).
 	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
 	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
@@ -90,9 +92,10 @@ type Querier interface {
 	// Ordered by flash so callers can group sequentially, then by size.
 	ListFlashPricingTiersForFlashes(ctx context.Context, flashIds []uuid.UUID) ([]FlashPricingTier, error)
 	ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error)
-	// The most recent appointment per request, so the inbox list can show the
-	// scheduled/proposed state without an N+1 lookup.
+	// The current appointment per request (live if any, else most recent), so the
+	// inbox list can show the scheduled/proposed state without an N+1 lookup.
 	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]Appointment, error)
+	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]Appointment, error)
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
@@ -106,6 +109,7 @@ type Querier interface {
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	SetAppointmentCalendarEvent(ctx context.Context, arg SetAppointmentCalendarEventParams) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
 	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
@@ -113,6 +117,7 @@ type Querier interface {
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	UpdateAppointmentSchedule(ctx context.Context, arg UpdateAppointmentScheduleParams) (Appointment, error)
+	UpdateAppointmentStatus(ctx context.Context, arg UpdateAppointmentStatusParams) (Appointment, error)
 	UpdateArtistLocation(ctx context.Context, arg UpdateArtistLocationParams) (ArtistLocation, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)

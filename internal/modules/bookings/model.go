@@ -76,6 +76,7 @@ type Inquiry struct {
 	SchedulingMode     string               `json:"schedulingMode"`
 	ArtistAvailability []AvailabilityWindow `json:"artistAvailability"`
 	Appointment        *Appointment         `json:"appointment,omitempty"`
+	LiveAppointments []Appointment `json:"liveAppointments"`
 }
 
 // AvailabilityWindow is one of the artist's recurring weekly working spans,
@@ -182,6 +183,7 @@ func inquiryFromRow(row sqlc.BookingRequest) Inquiry {
 	}
 	out.ReferenceImageURLs = []string{}
 	out.ArtistAvailability = []AvailabilityWindow{}
+	out.LiveAppointments = []Appointment{}
 	if out.Styles == nil {
 		out.Styles = []string{}
 	}

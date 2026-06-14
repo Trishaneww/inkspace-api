@@ -8,20 +8,41 @@ INSERT INTO appointments (
 )
 RETURNING *;
 
+-- name: SetAppointmentCalendarEvent :exec
+UPDATE appointments
+SET google_calendar_event_id = sqlc.narg('google_calendar_event_id')::text,
+    updated_at               = now()
+WHERE id = @id;
+
+-- name: UpdateAppointmentStatus :one
+UPDATE appointments
+SET status     = @status,
+    updated_at = now()
+WHERE id = @id AND artist_id = @artist_id
+RETURNING *;
+
 -- name: GetLatestAppointmentByRequest :one
+-- The request's "current" appointment: a live (scheduled/proposed) one if any,
+-- otherwise the most recent overall (so cancelled ones still surface for history).
 SELECT *
 FROM appointments
 WHERE booking_request_id = $1
-ORDER BY created_at DESC
+ORDER BY (status IN ('scheduled', 'proposed')) DESC, created_at DESC
 LIMIT 1;
 
+-- name: ListLiveAppointmentsByRequest :many
+SELECT *
+FROM appointments
+WHERE booking_request_id = $1 AND status IN ('scheduled', 'proposed')
+ORDER BY created_at;
+
 -- name: ListLatestAppointmentsByArtist :many
--- The most recent appointment per request, so the inbox list can show the
--- scheduled/proposed state without an N+1 lookup.
+-- The current appointment per request (live if any, else most recent), so the
+-- inbox list can show the scheduled/proposed state without an N+1 lookup.
 SELECT DISTINCT ON (booking_request_id) *
 FROM appointments
 WHERE artist_id = $1
-ORDER BY booking_request_id, created_at DESC;
+ORDER BY booking_request_id, (status IN ('scheduled', 'proposed')) DESC, created_at DESC;
 
 -- name: UpdateAppointmentSchedule :one
 UPDATE appointments

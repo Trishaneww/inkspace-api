@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/config"
+	"github.com/trishaneupnexx/inkspace-api/internal/crypto"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 )
@@ -30,18 +32,20 @@ type Service interface {
 	AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID, input AcceptInput) (Inquiry, error)
 	RequestConsultation(ctx context.Context, userID, inquiryID uuid.UUID, input RequestConsultationInput) (Inquiry, error)
 	RescheduleAppointment(ctx context.Context, userID, inquiryID uuid.UUID, input RescheduleInput) (Inquiry, error)
+	CancelBooking(ctx context.Context, userID, inquiryID uuid.UUID, appointmentID *uuid.UUID) (Inquiry, error)
 	DeclineInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	ReopenInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
 type service struct {
-	repo Repository
-	s3   *s3client.Client
+	repo     Repository
+	s3       *s3client.Client
+	calendar *calendarClient
 }
 
-func NewService(repo Repository, s3 *s3client.Client) Service {
-	return &service{repo: repo, s3: s3}
+func NewService(repo Repository, s3 *s3client.Client, cfg *config.Config, cipher *crypto.Cipher) Service {
+	return &service{repo: repo, s3: s3, calendar: newCalendarClient(cfg, cipher)}
 }
 
 func (s *service) ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryListResponse, error) {
@@ -140,7 +144,7 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 		return Inquiry{}, err
 	}
 
-	if _, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+	appt, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
 		ArtistID:         artist.ID,
 		BookingRequestID: inquiryID,
 		Type:             string(AppointmentSession),
@@ -148,7 +152,8 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 		ScheduledStart:   start,
 		DurationMinutes:  duration,
 		SchedulingOrigin: origin,
-	}); err != nil {
+	})
+	if err != nil {
 		return Inquiry{}, err
 	}
 
@@ -166,6 +171,7 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 			return Inquiry{}, err
 		}
 	}
+	s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
 	return inquiry, nil
 }
 
@@ -199,7 +205,7 @@ func (s *service) RequestConsultation(ctx context.Context, userID, inquiryID uui
 		return Inquiry{}, err
 	}
 
-	if _, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+	appt, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
 		ArtistID:         artist.ID,
 		BookingRequestID: inquiryID,
 		Type:             string(AppointmentConsultation),
@@ -208,13 +214,19 @@ func (s *service) RequestConsultation(ctx context.Context, userID, inquiryID uui
 		DurationMinutes:  duration,
 		Format:           &format,
 		SchedulingOrigin: origin,
-	}); err != nil {
+	})
+	if err != nil {
 		return Inquiry{}, err
 	}
 
-	return s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
+	inquiry, err := s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
 		Status: "consultation_requested",
 	})
+	if err != nil {
+		return Inquiry{}, err
+	}
+	s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
+	return inquiry, nil
 }
 
 func (s *service) RescheduleAppointment(ctx context.Context, userID, inquiryID uuid.UUID, input RescheduleInput) (Inquiry, error) {
@@ -251,29 +263,89 @@ func (s *service) RescheduleAppointment(ctx context.Context, userID, inquiryID u
 		return Inquiry{}, err
 	}
 
+	var synced sqlc.Appointment
 	if hasAppointment {
-		if _, err := s.repo.UpdateAppointmentSchedule(ctx, sqlc.UpdateAppointmentScheduleParams{
+		synced, err = s.repo.UpdateAppointmentSchedule(ctx, sqlc.UpdateAppointmentScheduleParams{
 			ID:              appt.ID,
 			ArtistID:        artist.ID,
 			ScheduledStart:  start,
 			DurationMinutes: input.DurationMinutes,
 			Format:          input.Format,
-		}); err != nil {
-			return Inquiry{}, err
+		})
+	} else {
+		synced, err = s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+			ArtistID:         artist.ID,
+			BookingRequestID: inquiryID,
+			Type:             string(AppointmentSession),
+			Status:           appointmentScheduled,
+			ScheduledStart:   start,
+			DurationMinutes:  duration,
+			SchedulingOrigin: originArtistSet,
+		})
+	}
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	inquiry, err := s.GetInquiry(ctx, userID, inquiryID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	s.syncAppointmentToCalendar(ctx, artist.ID, synced, inquiry)
+	return inquiry, nil
+}
+
+func (s *service) CancelBooking(ctx context.Context, userID, inquiryID uuid.UUID, appointmentID *uuid.UUID) (Inquiry, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	live, err := s.repo.ListLiveAppointmentsByRequest(ctx, inquiryID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	if len(live) == 0 {
+		return s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
+			Status: "cancelled",
+		})
+	}
+
+	target := live[len(live)-1]
+	if appointmentID != nil {
+		found := false
+		for _, a := range live {
+			if a.ID == *appointmentID {
+				target = a
+				found = true
+				break
+			}
 		}
-	} else if _, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
-		ArtistID:         artist.ID,
-		BookingRequestID: inquiryID,
-		Type:             string(AppointmentSession),
-		Status:           appointmentScheduled,
-		ScheduledStart:   start,
-		DurationMinutes:  duration,
-		SchedulingOrigin: originArtistSet,
+		if !found {
+			return Inquiry{}, ErrNotFound
+		}
+	}
+	if target.ArtistID != artist.ID {
+		return Inquiry{}, ErrNotFound
+	}
+
+	s.removeAppointmentFromCalendar(ctx, artist.ID, target)
+	if _, err := s.repo.UpdateAppointmentStatus(ctx, sqlc.UpdateAppointmentStatusParams{
+		ID:       target.ID,
+		ArtistID: artist.ID,
+		Status:   "cancelled",
 	}); err != nil {
 		return Inquiry{}, err
 	}
 
-	return s.GetInquiry(ctx, userID, inquiryID)
+	for _, a := range live {
+		if a.ID != target.ID {
+			return s.GetInquiry(ctx, userID, inquiryID)
+		}
+	}
+	return s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
+		Status: "cancelled",
+	})
 }
 
 // resolveSchedule maps the artist's scheduling mode to the appointment's
@@ -459,6 +531,13 @@ func (s *service) attachSchedulingContext(ctx context.Context, row sqlc.BookingR
 
 	if windows, err := s.repo.ListAvailabilityWindows(ctx, row.ArtistID); err == nil {
 		inquiry.ArtistAvailability = availabilityWindowsFromRows(windows)
+	}
+
+	if live, err := s.repo.ListLiveAppointmentsByRequest(ctx, row.ID); err == nil {
+		inquiry.LiveAppointments = make([]Appointment, 0, len(live))
+		for _, a := range live {
+			inquiry.LiveAppointments = append(inquiry.LiveAppointments, *appointmentFromRow(a))
+		}
 	}
 
 	appt, err := s.repo.GetLatestAppointmentByRequest(ctx, row.ID)
