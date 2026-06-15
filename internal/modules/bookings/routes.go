@@ -16,6 +16,9 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	bookings.POST("/dev-seed", m.Handler.DevSeed)
 	bookings.GET("/:id", m.Handler.Get)
 	bookings.POST("/:id/accept", m.Handler.Accept)
+	bookings.POST("/:id/request-consultation", m.Handler.RequestConsultation)
+	bookings.POST("/:id/reschedule", m.Handler.Reschedule)
+	bookings.POST("/:id/cancel", m.Handler.Cancel)
 	bookings.POST("/:id/decline", m.Handler.Decline)
 	bookings.POST("/:id/reopen", m.Handler.Reopen)
 }

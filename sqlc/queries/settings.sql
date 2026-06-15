@@ -30,13 +30,7 @@ SELECT * FROM artist_settings WHERE artist_id = $1;
 
 -- name: UpdateArtistSettings :one
 UPDATE artist_settings
-SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,            studio_name),
-    studio_address         = COALESCE(sqlc.narg('studio_address')::text,         studio_address),
-    studio_city            = COALESCE(sqlc.narg('studio_city')::text,            studio_city),
-    studio_province        = COALESCE(sqlc.narg('studio_province')::text,        studio_province),
-    studio_postal_code     = COALESCE(sqlc.narg('studio_postal_code')::text,     studio_postal_code),
-    studio_country         = COALESCE(sqlc.narg('studio_country')::text,         studio_country),
-    payout_frequency       = COALESCE(sqlc.narg('payout_frequency')::text,       payout_frequency),
+SET payout_frequency       = COALESCE(sqlc.narg('payout_frequency')::text,       payout_frequency),
     currency               = COALESCE(sqlc.narg('currency')::char(3),            currency),
     platform_fee_payer     = COALESCE(sqlc.narg('platform_fee_payer')::text,     platform_fee_payer),
     accepting_bookings     = COALESCE(sqlc.narg('accepting_bookings')::boolean,  accepting_bookings),
@@ -52,6 +46,8 @@ SET studio_name            = COALESCE(sqlc.narg('studio_name')::text,           
     notify_by_sms          = COALESCE(sqlc.narg('notify_by_sms')::boolean,       notify_by_sms),
     deposit_refund_policy  = COALESCE(sqlc.narg('deposit_refund_policy')::text,  deposit_refund_policy),
     styles                 = COALESCE(sqlc.narg('styles')::text[],              styles),
+    aftercare              = COALESCE(sqlc.narg('aftercare')::text,              aftercare),
+    faqs                   = COALESCE(sqlc.narg('faqs')::jsonb,                  faqs),
 
     -- Nullable fields support explicit clearing via a paired boolean.
     deposit_flat_fee_cents = CASE

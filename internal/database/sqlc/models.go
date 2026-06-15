@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Appointment struct {
+	ID                    uuid.UUID          `json:"id"`
+	ArtistID              uuid.UUID          `json:"artist_id"`
+	BookingRequestID      uuid.UUID          `json:"booking_request_id"`
+	Type                  string             `json:"type"`
+	Status                string             `json:"status"`
+	ScheduledStart        pgtype.Timestamptz `json:"scheduled_start"`
+	DurationMinutes       int32              `json:"duration_minutes"`
+	Format                *string            `json:"format"`
+	SchedulingOrigin      string             `json:"scheduling_origin"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	GoogleCalendarEventID *string            `json:"google_calendar_event_id"`
+}
+
 type Artist struct {
 	ID          uuid.UUID          `json:"id"`
 	UserID      uuid.UUID          `json:"user_id"`
@@ -41,6 +56,25 @@ type ArtistDaysOff struct {
 	Day      pgtype.Date `json:"day"`
 }
 
+type ArtistLocation struct {
+	ID         uuid.UUID          `json:"id"`
+	ArtistID   uuid.UUID          `json:"artist_id"`
+	Label      string             `json:"label"`
+	Address    string             `json:"address"`
+	City       string             `json:"city"`
+	Province   string             `json:"province"`
+	PostalCode string             `json:"postal_code"`
+	Country    string             `json:"country"`
+	Timezone   string             `json:"timezone"`
+	IsPrimary  bool               `json:"is_primary"`
+	StartDate  pgtype.Date        `json:"start_date"`
+	EndDate    pgtype.Date        `json:"end_date"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	Status     string             `json:"status"`
+	ClosedAt   pgtype.Timestamptz `json:"closed_at"`
+}
+
 type ArtistSessionPreset struct {
 	ID                    uuid.UUID          `json:"id"`
 	ArtistID              uuid.UUID          `json:"artist_id"`
@@ -53,12 +87,6 @@ type ArtistSessionPreset struct {
 
 type ArtistSetting struct {
 	ArtistID                   uuid.UUID          `json:"artist_id"`
-	StudioName                 string             `json:"studio_name"`
-	StudioAddress              string             `json:"studio_address"`
-	StudioCity                 string             `json:"studio_city"`
-	StudioProvince             string             `json:"studio_province"`
-	StudioPostalCode           string             `json:"studio_postal_code"`
-	StudioCountry              string             `json:"studio_country"`
 	StripeAccountID            *string            `json:"stripe_account_id"`
 	PayoutFrequency            string             `json:"payout_frequency"`
 	Currency                   string             `json:"currency"`
@@ -89,6 +117,9 @@ type ArtistSetting struct {
 	DepositRefundPolicy        string             `json:"deposit_refund_policy"`
 	CancellationNoticeHours    *int32             `json:"cancellation_notice_hours"`
 	Styles                     []string           `json:"styles"`
+	Aftercare                  string             `json:"aftercare"`
+	Faqs                       []byte             `json:"faqs"`
+	CurrentLocationID          pgtype.UUID        `json:"current_location_id"`
 }
 
 type BookingRequest struct {
@@ -104,7 +135,7 @@ type BookingRequest struct {
 	ClientAvailability     []byte             `json:"client_availability"`
 	ClientName             string             `json:"client_name"`
 	ClientEmail            string             `json:"client_email"`
-	ClientPhone            *string            `json:"client_phone"`
+	ClientPhone            string             `json:"client_phone"`
 	Status                 string             `json:"status"`
 	DepositStatus          string             `json:"deposit_status"`
 	WaiverStatus           string             `json:"waiver_status"`
@@ -115,6 +146,9 @@ type BookingRequest struct {
 	DecidedAt              pgtype.Timestamptz `json:"decided_at"`
 	Styles                 []string           `json:"styles"`
 	CustomAnswers          []byte             `json:"custom_answers"`
+	ColorType              string             `json:"color_type"`
+	LocationID             pgtype.UUID        `json:"location_id"`
+	FlashSizeCode          string             `json:"flash_size_code"`
 }
 
 type Flash struct {

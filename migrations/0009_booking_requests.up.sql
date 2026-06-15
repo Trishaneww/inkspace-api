@@ -14,10 +14,11 @@ CREATE TABLE booking_requests (
 
     client_name              TEXT        NOT NULL,
     client_email             CITEXT      NOT NULL,
-    client_phone             TEXT,
+    client_phone             TEXT        NOT NULL DEFAULT '',
 
     status                   TEXT        NOT NULL DEFAULT 'pending'
-                             CHECK (status IN ('pending', 'consultation_requested', 'accepted', 'declined', 'expired', 'converted')),
+                             CHECK (status IN ('pending', 'consultation_requested', 'accepted',
+                                               'declined', 'expired', 'converted', 'cancelled')),
     deposit_status           TEXT        NOT NULL DEFAULT 'not_required'
                              CHECK (deposit_status IN ('not_required', 'pending', 'paid', 'refunded')),
     waiver_status            TEXT        NOT NULL DEFAULT 'not_required'
@@ -28,7 +29,13 @@ CREATE TABLE booking_requests (
 
     created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
-    decided_at               TIMESTAMPTZ
+    decided_at               TIMESTAMPTZ,
+
+    styles          TEXT[]  NOT NULL DEFAULT '{}',
+    custom_answers  JSONB   NOT NULL DEFAULT '[]',
+    color_type      TEXT    NOT NULL DEFAULT '',
+    location_id     UUID    REFERENCES artist_locations (id) ON DELETE SET NULL,
+    flash_size_code TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE INDEX idx_booking_requests_artist_status

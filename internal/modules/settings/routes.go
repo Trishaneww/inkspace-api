@@ -36,6 +36,11 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	artist.PUT("/settings/availability", m.Handler.SetAvailability)
 	artist.POST("/settings/waiver/presign", m.Handler.PresignWaiver)
 
+	artist.POST("/settings/locations", m.Handler.CreateLocation)
+	artist.PATCH("/settings/locations/:id", m.Handler.UpdateLocation)
+	artist.DELETE("/settings/locations/:id", m.Handler.DeleteLocation)
+	artist.POST("/settings/locations/current", m.Handler.SetCurrentLocation)
+
 	artist.POST("/settings/session-presets", m.Handler.CreatePreset)
 	artist.PATCH("/settings/session-presets/:id", m.Handler.UpdatePreset)
 	artist.DELETE("/settings/session-presets/:id", m.Handler.DeletePreset)

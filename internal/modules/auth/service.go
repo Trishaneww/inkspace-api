@@ -217,7 +217,7 @@ func (s *service) otpSendAllowed(ctx context.Context, phone string) bool {
 	if s.otpLimiter == nil {
 		return true
 	}
-	res, err := s.otpLimiter.Allow(ctx, otpSendKey(phone))
+	res, err := s.otpLimiter.CheckLimit(ctx, otpSendKey(phone))
 	if err != nil {
 		s.log.Warn("otp_send_limit_check_failed", "error", err)
 		return true // fail open

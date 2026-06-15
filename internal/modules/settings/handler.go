@@ -285,6 +285,79 @@ func (h *Handler) DeletePreset(c *gin.Context) {
 	httpx.NoContent(c)
 }
 
+func (h *Handler) CreateLocation(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	var input CreateLocationInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, 400, "invalid_request", err.Error())
+		return
+	}
+	location, err := h.svc.CreateLocation(c.Request.Context(), userID, input)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.Created(c, location)
+}
+
+func (h *Handler) UpdateLocation(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	locationID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var input UpdateLocationInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, 400, "invalid_request", err.Error())
+		return
+	}
+	location, err := h.svc.UpdateLocation(c.Request.Context(), userID, locationID, input)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, location)
+}
+
+func (h *Handler) DeleteLocation(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	locationID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteLocation(c.Request.Context(), userID, locationID); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.NoContent(c)
+}
+
+func (h *Handler) SetCurrentLocation(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	var input SetCurrentLocationInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, 400, "invalid_request", err.Error())
+		return
+	}
+	if err := h.svc.SetCurrentLocation(c.Request.Context(), userID, input); err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.NoContent(c)
+}
+
 func (h *Handler) AddDayOff(c *gin.Context) {
 	userID, ok := requireUserID(c)
 	if !ok {

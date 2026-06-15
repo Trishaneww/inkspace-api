@@ -71,6 +71,78 @@ func (h *Handler) Accept(c *gin.Context) {
 	httpx.OK(c, inquiry)
 }
 
+func (h *Handler) RequestConsultation(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var input RequestConsultationInput
+	_ = c.ShouldBindJSON(&input)
+
+	inquiry, err := h.svc.RequestConsultation(c.Request.Context(), userID, id, input)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, inquiry)
+}
+
+func (h *Handler) Reschedule(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var input RescheduleInput
+	_ = c.ShouldBindJSON(&input)
+
+	inquiry, err := h.svc.RescheduleAppointment(c.Request.Context(), userID, id, input)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, inquiry)
+}
+
+func (h *Handler) Cancel(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+
+	var input struct {
+		AppointmentID *string `json:"appointmentId"`
+	}
+	_ = c.ShouldBindJSON(&input)
+	var appointmentID *uuid.UUID
+	if input.AppointmentID != nil && *input.AppointmentID != "" {
+		parsed, err := uuid.Parse(*input.AppointmentID)
+		if err != nil {
+			httpx.Error(c, http.StatusBadRequest, "invalid_id", "invalid appointment id")
+			return
+		}
+		appointmentID = &parsed
+	}
+
+	inquiry, err := h.svc.CancelBooking(c.Request.Context(), userID, id, appointmentID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, inquiry)
+}
+
 func (h *Handler) Decline(c *gin.Context) {
 	userID, ok := requireUserID(c)
 	if !ok {
@@ -146,6 +218,10 @@ func respondError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, ErrNoOpenBook):
 		httpx.Error(c, http.StatusConflict, "no_open_book", err.Error())
+	case errors.Is(err, ErrInvalidSchedule):
+		httpx.Error(c, http.StatusBadRequest, "invalid_schedule", err.Error())
+	case errors.Is(err, ErrScheduleConflict):
+		httpx.Error(c, http.StatusConflict, "schedule_conflict", err.Error())
 	default:
 		httpx.Error(c, http.StatusInternalServerError, "internal_error", "an unexpected error occurred")
 	}

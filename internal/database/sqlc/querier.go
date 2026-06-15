@@ -19,9 +19,18 @@ type Querier interface {
 	ClaimFlash(ctx context.Context, arg ClaimFlashParams) (Flash, error)
 	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
+	// Soft-delete a guest spot: mark it closed but keep the row so booking
+	// requests retain their location. The home studio can't be closed.
+	CloseArtistLocation(ctx context.Context, arg CloseArtistLocationParams) error
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
+	// Counts the artist's live, time-locked appointments whose [start, start+duration)
+	// window overlaps the proposed one — used to block double-booking. Proposed
+	// client-scheduled slots (NULL start) and cancelled/no-show slots never conflict.
+	CountOverlappingAppointments(ctx context.Context, arg CountOverlappingAppointmentsParams) (int64, error)
 	CountPortfolioItemsByArtist(ctx context.Context, arg CountPortfolioItemsByArtistParams) (CountPortfolioItemsByArtistRow, error)
+	CreateAppointment(ctx context.Context, arg CreateAppointmentParams) (Appointment, error)
+	CreateArtistLocation(ctx context.Context, arg CreateArtistLocationParams) (ArtistLocation, error)
 	CreateAvailabilityWindow(ctx context.Context, arg CreateAvailabilityWindowParams) (ArtistAvailabilityWindow, error)
 	CreateBookingRequest(ctx context.Context, arg CreateBookingRequestParams) (BookingRequest, error)
 	CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash, error)
@@ -31,6 +40,9 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSessionPreset(ctx context.Context, arg CreateSessionPresetParams) (ArtistSessionPreset, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Once one request claims a flash, auto-decline the other pending requests
+	// competing for the same flash (used for non-repeatable flashes).
+	DeclineOtherFlashRequests(ctx context.Context, arg DeclineOtherFlashRequestsParams) error
 	DeleteAllAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error
 	DeleteAllFlashPricingTiers(ctx context.Context, flashID uuid.UUID) error
 	DeleteExpiredPhoneVerifications(ctx context.Context) (int64, error)
@@ -45,22 +57,32 @@ type Querier interface {
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
+	GetArtistLocation(ctx context.Context, arg GetArtistLocationParams) (ArtistLocation, error)
 	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
-	// Counts that back the dashboard stat cards.
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
+	// The request's "current" appointment: a live (scheduled/proposed) one if any,
+	// otherwise the most recent overall (so cancelled ones still surface for history).
+	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
 	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
 	GetPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
+	GetPrimaryLocation(ctx context.Context, artistID uuid.UUID) (ArtistLocation, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByPhone(ctx context.Context, phone *string) (User, error)
 	GetUserByUsername(ctx context.Context, username *string) (User, error)
 	IncrementFlashViewCount(ctx context.Context, id uuid.UUID) error
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
+	// Every location including closed ones, so a booking request can always
+	// resolve the spot it was tagged with even after the artist closes it.
+	ListAllArtistLocations(ctx context.Context, artistID uuid.UUID) ([]ArtistLocation, error)
+	// Active locations only — what the artist can currently work from and what
+	// clients can book. Closed guest spots are excluded.
+	ListArtistLocations(ctx context.Context, artistID uuid.UUID) ([]ArtistLocation, error)
 	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]ArtistAvailabilityWindow, error)
 	ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]ArtistBlocklist, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error)
@@ -70,6 +92,10 @@ type Querier interface {
 	// Ordered by flash so callers can group sequentially, then by size.
 	ListFlashPricingTiersForFlashes(ctx context.Context, flashIds []uuid.UUID) ([]FlashPricingTier, error)
 	ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error)
+	// The current appointment per request (live if any, else most recent), so the
+	// inbox list can show the scheduled/proposed state without an N+1 lookup.
+	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]Appointment, error)
+	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]Appointment, error)
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
@@ -79,23 +105,24 @@ type Querier interface {
 	RefreshPhoneVerificationCode(ctx context.Context, arg RefreshPhoneVerificationCodeParams) error
 	RemoveBlocklistEntry(ctx context.Context, arg RemoveBlocklistEntryParams) error
 	RemoveDayOff(ctx context.Context, arg RemoveDayOffParams) error
-	// Undo a decision: return the request to the inbox as a fresh (pending) lead.
 	ReopenBookingRequest(ctx context.Context, arg ReopenBookingRequestParams) (BookingRequest, error)
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	SetAppointmentCalendarEvent(ctx context.Context, arg SetAppointmentCalendarEventParams) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
+	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
+	UpdateAppointmentSchedule(ctx context.Context, arg UpdateAppointmentScheduleParams) (Appointment, error)
+	UpdateAppointmentStatus(ctx context.Context, arg UpdateAppointmentStatusParams) (Appointment, error)
+	UpdateArtistLocation(ctx context.Context, arg UpdateArtistLocationParams) (ArtistLocation, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)
 	UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) (OpenBook, error)
-	// Full-field replace: the edit sheet submits the complete item state, so a
-	// nil narg here intentionally clears the column (lets the artist remove an
-	// optional value, which a COALESCE-merge update couldn't).
 	UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error)
 	UpdateSessionPreset(ctx context.Context, arg UpdateSessionPresetParams) (ArtistSessionPreset, error)
 	UpdateStripeAccountStatus(ctx context.Context, arg UpdateStripeAccountStatusParams) (ArtistSetting, error)
