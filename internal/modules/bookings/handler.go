@@ -3,6 +3,7 @@ package bookings
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -32,6 +33,52 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, resp)
+}
+
+func (h *Handler) Calendar(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	rangeStart, err := time.Parse(time.RFC3339, c.Query("from"))
+	if err != nil {
+		httpx.Error(c, http.StatusBadRequest, "invalid_range", "from must be an RFC3339 timestamp")
+		return
+	}
+	rangeEnd, err := time.Parse(time.RFC3339, c.Query("to"))
+	if err != nil {
+		httpx.Error(c, http.StatusBadRequest, "invalid_range", "to must be an RFC3339 timestamp")
+		return
+	}
+	if !rangeEnd.After(rangeStart) {
+		httpx.Error(c, http.StatusBadRequest, "invalid_range", "to must be after from")
+		return
+	}
+
+	events, err := h.svc.ListCalendarEvents(c.Request.Context(), userID, rangeStart, rangeEnd)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, gin.H{"events": events})
+}
+
+func (h *Handler) CreateAppointment(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	var input CreateAppointmentInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, http.StatusBadRequest, "invalid_input", "invalid request body")
+		return
+	}
+	inquiry, err := h.svc.CreateManualAppointment(c.Request.Context(), userID, input)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.Created(c, inquiry)
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -220,6 +267,8 @@ func respondError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusConflict, "no_open_book", err.Error())
 	case errors.Is(err, ErrInvalidSchedule):
 		httpx.Error(c, http.StatusBadRequest, "invalid_schedule", err.Error())
+	case errors.Is(err, ErrInvalidInput):
+		httpx.Error(c, http.StatusBadRequest, "invalid_input", err.Error())
 	case errors.Is(err, ErrScheduleConflict):
 		httpx.Error(c, http.StatusConflict, "schedule_conflict", err.Error())
 	default:
