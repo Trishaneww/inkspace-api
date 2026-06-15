@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,10 +25,13 @@ var (
 	ErrNoOpenBook       = errors.New("artist has no open book")
 	ErrInvalidSchedule  = errors.New("invalid schedule: a session length is required, and a start time is required when you schedule clients yourself")
 	ErrScheduleConflict = errors.New("that time overlaps an appointment you've already scheduled")
+	ErrInvalidInput     = errors.New("missing or invalid appointment details")
 )
 
 type Service interface {
 	ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryListResponse, error)
+	ListCalendarEvents(ctx context.Context, userID uuid.UUID, rangeStart, rangeEnd time.Time) ([]CalendarEvent, error)
+	CreateManualAppointment(ctx context.Context, userID uuid.UUID, input CreateAppointmentInput) (Inquiry, error)
 	GetInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID, input AcceptInput) (Inquiry, error)
 	RequestConsultation(ctx context.Context, userID, inquiryID uuid.UUID, input RequestConsultationInput) (Inquiry, error)
@@ -70,6 +74,128 @@ func (s *service) ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryL
 	s.attachLocations(ctx, artist.ID, inquiries)
 	s.attachAppointments(ctx, artist.ID, inquiries)
 	return InquiryListResponse{Inquiries: inquiries, Stats: statsFromRow(statsRow)}, nil
+}
+
+func (s *service) ListCalendarEvents(ctx context.Context, userID uuid.UUID, rangeStart, rangeEnd time.Time) ([]CalendarEvent, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.repo.ListAppointmentsByArtistInRange(ctx, sqlc.ListAppointmentsByArtistInRangeParams{
+		ArtistID:   artist.ID,
+		RangeStart: pgtype.Timestamptz{Time: rangeStart, Valid: true},
+		RangeEnd:   pgtype.Timestamptz{Time: rangeEnd, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	events := make([]CalendarEvent, 0, len(rows))
+	for _, row := range rows {
+		events = append(events, calendarEventFromRow(row))
+	}
+	return events, nil
+}
+
+func (s *service) CreateManualAppointment(ctx context.Context, userID uuid.UUID, input CreateAppointmentInput) (Inquiry, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	book, err := s.requireOpenBook(ctx, artist.ID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	apptType := input.Type
+	if apptType != string(AppointmentConsultation) && apptType != string(AppointmentSession) {
+		return Inquiry{}, ErrInvalidInput
+	}
+	if strings.TrimSpace(input.ClientName) == "" || strings.TrimSpace(input.ClientEmail) == "" {
+		return Inquiry{}, ErrInvalidInput
+	}
+	if input.ScheduledStart == nil || input.DurationMinutes <= 0 {
+		return Inquiry{}, ErrInvalidSchedule
+	}
+
+	var format *string
+	if apptType == string(AppointmentConsultation) {
+		f := defaultConsultationFormat
+		if input.Format != nil && *input.Format != "" {
+			if !validFormat(*input.Format) {
+				return Inquiry{}, ErrInvalidSchedule
+			}
+			f = *input.Format
+		}
+		format = &f
+	}
+
+	locationID := pgtype.UUID{}
+	if input.LocationID != nil && *input.LocationID != "" {
+		parsed, err := uuid.Parse(*input.LocationID)
+		if err != nil {
+			return Inquiry{}, ErrInvalidInput
+		}
+		locationID = pgtype.UUID{Bytes: parsed, Valid: true}
+	}
+
+	start := pgtype.Timestamptz{Time: *input.ScheduledStart, Valid: true}
+	if err := s.assertNoConflict(ctx, artist.ID, uuid.Nil, start, input.DurationMinutes); err != nil {
+		return Inquiry{}, err
+	}
+
+	var sessionDuration *int32
+	if apptType == string(AppointmentSession) {
+		d := input.DurationMinutes
+		sessionDuration = &d
+	}
+
+	req, err := s.repo.CreateBookingRequest(ctx, sqlc.CreateBookingRequestParams{
+		ArtistID:               artist.ID,
+		OpenBookID:             book.ID,
+		Type:                   string(RequestTypeCustom),
+		Description:            input.Description,
+		ReferenceImageKeys:     []string{},
+		Placement:              input.Placement,
+		ApproxSizeInches:       input.ApproxSizeInches,
+		ColorType:              input.ColorType,
+		LocationID:             locationID,
+		Styles:                 []string{},
+		ClientAvailability:     []byte("[]"),
+		CustomAnswers:          []byte("[]"),
+		ClientName:             strings.TrimSpace(input.ClientName),
+		ClientEmail:            strings.TrimSpace(input.ClientEmail),
+		ClientPhone:            input.ClientPhone,
+		Status:                 "accepted",
+		DepositStatus:          "not_required",
+		WaiverStatus:           "not_required",
+		SessionDurationMinutes: sessionDuration,
+	})
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	appt, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+		ArtistID:         artist.ID,
+		BookingRequestID: req.ID,
+		Type:             apptType,
+		Status:           appointmentScheduled,
+		ScheduledStart:   start,
+		DurationMinutes:  input.DurationMinutes,
+		Format:           format,
+		SchedulingOrigin: originArtistSet,
+	})
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	inquiry, err := s.GetInquiry(ctx, userID, req.ID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
+	return inquiry, nil
 }
 
 // attachAppointments hangs the latest appointment off each list inquiry so the

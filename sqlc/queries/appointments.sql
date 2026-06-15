@@ -66,3 +66,29 @@ WHERE artist_id = @artist_id
   AND booking_request_id <> @exclude_request_id
   AND tstzrange(scheduled_start, scheduled_start + duration_minutes * interval '1 minute')
       && tstzrange(@window_start::timestamptz, @window_end::timestamptz);
+
+-- name: ListAppointmentsByArtistInRange :many
+-- Scheduled (time-locked) appointments for the calendar, joined with their
+-- booking request and studio location. Proposed (no start) and cancelled/no-show
+-- appointments are excluded — they have no place on a time grid.
+SELECT
+    a.id,
+    a.booking_request_id,
+    a.type,
+    a.status,
+    a.scheduled_start,
+    a.duration_minutes,
+    a.format,
+    br.client_name,
+    COALESCE(loc.label, '')   AS location_label,
+    COALESCE(loc.address, '') AS location_address,
+    COALESCE(loc.city, '')    AS location_city
+FROM appointments a
+JOIN booking_requests br ON br.id = a.booking_request_id
+LEFT JOIN artist_locations loc ON loc.id = br.location_id
+WHERE a.artist_id = @artist_id
+  AND a.scheduled_start IS NOT NULL
+  AND a.status NOT IN ('cancelled', 'no_show')
+  AND a.scheduled_start >= @range_start::timestamptz
+  AND a.scheduled_start <  @range_end::timestamptz
+ORDER BY a.scheduled_start;

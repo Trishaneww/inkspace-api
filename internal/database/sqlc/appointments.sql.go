@@ -126,6 +126,85 @@ func (q *Queries) GetLatestAppointmentByRequest(ctx context.Context, bookingRequ
 	return i, err
 }
 
+const listAppointmentsByArtistInRange = `-- name: ListAppointmentsByArtistInRange :many
+SELECT
+    a.id,
+    a.booking_request_id,
+    a.type,
+    a.status,
+    a.scheduled_start,
+    a.duration_minutes,
+    a.format,
+    br.client_name,
+    COALESCE(loc.label, '')   AS location_label,
+    COALESCE(loc.address, '') AS location_address,
+    COALESCE(loc.city, '')    AS location_city
+FROM appointments a
+JOIN booking_requests br ON br.id = a.booking_request_id
+LEFT JOIN artist_locations loc ON loc.id = br.location_id
+WHERE a.artist_id = $1
+  AND a.scheduled_start IS NOT NULL
+  AND a.status NOT IN ('cancelled', 'no_show')
+  AND a.scheduled_start >= $2::timestamptz
+  AND a.scheduled_start <  $3::timestamptz
+ORDER BY a.scheduled_start
+`
+
+type ListAppointmentsByArtistInRangeParams struct {
+	ArtistID   uuid.UUID          `json:"artist_id"`
+	RangeStart pgtype.Timestamptz `json:"range_start"`
+	RangeEnd   pgtype.Timestamptz `json:"range_end"`
+}
+
+type ListAppointmentsByArtistInRangeRow struct {
+	ID               uuid.UUID          `json:"id"`
+	BookingRequestID uuid.UUID          `json:"booking_request_id"`
+	Type             string             `json:"type"`
+	Status           string             `json:"status"`
+	ScheduledStart   pgtype.Timestamptz `json:"scheduled_start"`
+	DurationMinutes  int32              `json:"duration_minutes"`
+	Format           *string            `json:"format"`
+	ClientName       string             `json:"client_name"`
+	LocationLabel    string             `json:"location_label"`
+	LocationAddress  string             `json:"location_address"`
+	LocationCity     string             `json:"location_city"`
+}
+
+// Scheduled (time-locked) appointments for the calendar, joined with their
+// booking request and studio location. Proposed (no start) and cancelled/no-show
+// appointments are excluded — they have no place on a time grid.
+func (q *Queries) ListAppointmentsByArtistInRange(ctx context.Context, arg ListAppointmentsByArtistInRangeParams) ([]ListAppointmentsByArtistInRangeRow, error) {
+	rows, err := q.db.Query(ctx, listAppointmentsByArtistInRange, arg.ArtistID, arg.RangeStart, arg.RangeEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAppointmentsByArtistInRangeRow
+	for rows.Next() {
+		var i ListAppointmentsByArtistInRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BookingRequestID,
+			&i.Type,
+			&i.Status,
+			&i.ScheduledStart,
+			&i.DurationMinutes,
+			&i.Format,
+			&i.ClientName,
+			&i.LocationLabel,
+			&i.LocationAddress,
+			&i.LocationCity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLatestAppointmentsByArtist = `-- name: ListLatestAppointmentsByArtist :many
 SELECT DISTINCT ON (booking_request_id) id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id
 FROM appointments

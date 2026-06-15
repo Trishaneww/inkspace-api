@@ -21,4 +21,10 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	bookings.POST("/:id/cancel", m.Handler.Cancel)
 	bookings.POST("/:id/decline", m.Handler.Decline)
 	bookings.POST("/:id/reopen", m.Handler.Reopen)
+
+	calendar := rg.Group("/current-user/calendar")
+	calendar.Use(middleware.RequireAuth(m.cfg.JWTSecret))
+	calendar.Use(middleware.RequireRole(string(auth.RoleArtist)))
+	calendar.GET("", m.Handler.Calendar)
+	calendar.POST("", m.Handler.CreateAppointment)
 }

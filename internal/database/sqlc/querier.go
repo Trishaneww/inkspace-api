@@ -80,6 +80,10 @@ type Querier interface {
 	// Every location including closed ones, so a booking request can always
 	// resolve the spot it was tagged with even after the artist closes it.
 	ListAllArtistLocations(ctx context.Context, artistID uuid.UUID) ([]ArtistLocation, error)
+	// Scheduled (time-locked) appointments for the calendar, joined with their
+	// booking request and studio location. Proposed (no start) and cancelled/no-show
+	// appointments are excluded — they have no place on a time grid.
+	ListAppointmentsByArtistInRange(ctx context.Context, arg ListAppointmentsByArtistInRangeParams) ([]ListAppointmentsByArtistInRangeRow, error)
 	// Active locations only — what the artist can currently work from and what
 	// clients can book. Closed guest spots are excluded.
 	ListArtistLocations(ctx context.Context, artistID uuid.UUID) ([]ArtistLocation, error)
