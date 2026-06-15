@@ -1,16 +1,9 @@
 CREATE TABLE artist_settings (
     artist_id              UUID        PRIMARY KEY REFERENCES artists (id) ON DELETE CASCADE,
 
-    studio_name            TEXT        NOT NULL DEFAULT '',
-    studio_address         TEXT        NOT NULL DEFAULT '',
-    studio_city            TEXT        NOT NULL DEFAULT '',
-    studio_province        TEXT        NOT NULL DEFAULT '',
-    studio_postal_code     TEXT        NOT NULL DEFAULT '',
-    studio_country         TEXT        NOT NULL DEFAULT '',
-
     stripe_account_id      TEXT,
     payout_frequency       TEXT        NOT NULL DEFAULT 'weekly'
-                           CHECK (payout_frequency IN ('weekly', 'biweekly', 'monthly')),
+                           CHECK (payout_frequency IN ('weekly', 'monthly')),
     currency               CHAR(3)     NOT NULL DEFAULT 'CAD',
 
     deposit_flat_fee_cents BIGINT      CHECK (deposit_flat_fee_cents IS NULL OR deposit_flat_fee_cents >= 0),
@@ -36,7 +29,27 @@ CREATE TABLE artist_settings (
     notify_by_sms          BOOLEAN     NOT NULL DEFAULT false,
 
     created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    google_calendar_access_token  TEXT,
+    google_calendar_refresh_token TEXT,
+    google_calendar_token_expiry  TIMESTAMPTZ,
+
+    stripe_charges_enabled   BOOLEAN NOT NULL DEFAULT false,
+    stripe_payouts_enabled   BOOLEAN NOT NULL DEFAULT false,
+    stripe_details_submitted BOOLEAN NOT NULL DEFAULT false,
+
+    deposit_refund_policy TEXT NOT NULL DEFAULT 'non_refundable'
+        CHECK (deposit_refund_policy IN ('non_refundable', 'refundable_within_window', 'always_refundable')),
+    cancellation_notice_hours INTEGER
+        CHECK (cancellation_notice_hours IS NULL OR cancellation_notice_hours > 0),
+
+    styles TEXT[] NOT NULL DEFAULT '{}',
+
+    aftercare TEXT  NOT NULL DEFAULT '',
+    faqs      JSONB NOT NULL DEFAULT '[]',
+
+    current_location_id UUID REFERENCES artist_locations (id) ON DELETE SET NULL
 );
 
 CREATE TABLE artist_availability_windows (

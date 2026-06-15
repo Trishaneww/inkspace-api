@@ -13,7 +13,7 @@ CREATE TABLE portfolio_items (
 
     styles             TEXT[]       NOT NULL DEFAULT '{}',
     placement          TEXT,
-    
+
     color_type         TEXT         CHECK (color_type IS NULL OR color_type IN ('black_and_grey', 'color')),
     approx_size_inches INTEGER      CHECK (approx_size_inches IS NULL OR approx_size_inches > 0),
     healed             BOOLEAN      NOT NULL DEFAULT false,

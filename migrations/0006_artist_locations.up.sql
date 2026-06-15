@@ -14,25 +14,21 @@ CREATE TABLE artist_locations (
     end_date     DATE,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Guest spots are closed (soft-deleted) rather than removed, so booking
+    -- requests keep their location reference and we retain a history of where
+    -- artists have worked.
+    status       TEXT        NOT NULL DEFAULT 'active'
+                 CHECK (status IN ('active', 'closed')),
+    closed_at    TIMESTAMPTZ,
     CONSTRAINT artist_location_dates_valid CHECK (
         (start_date IS NULL AND end_date IS NULL)
         OR (start_date IS NOT NULL AND end_date IS NOT NULL AND end_date >= start_date)
-    )
+    ),
+    CONSTRAINT artist_locations_closed_requires_timestamp
+        CHECK (status <> 'closed' OR closed_at IS NOT NULL)
 );
 
 CREATE INDEX idx_artist_locations_artist ON artist_locations (artist_id);
 
 CREATE UNIQUE INDEX idx_artist_locations_primary
     ON artist_locations (artist_id) WHERE is_primary;
-
-ALTER TABLE artist_settings
-    DROP COLUMN studio_name,
-    DROP COLUMN studio_address,
-    DROP COLUMN studio_city,
-    DROP COLUMN studio_province,
-    DROP COLUMN studio_postal_code,
-    DROP COLUMN studio_country,
-    ADD COLUMN current_location_id UUID REFERENCES artist_locations (id) ON DELETE SET NULL;
-
-ALTER TABLE booking_requests
-    ADD COLUMN location_id UUID REFERENCES artist_locations (id) ON DELETE SET NULL;

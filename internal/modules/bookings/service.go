@@ -242,19 +242,18 @@ func (s *service) RescheduleAppointment(ctx context.Context, userID, inquiryID u
 	}
 
 	appt, err := s.repo.GetLatestAppointmentByRequest(ctx, inquiryID)
-	hasAppointment := err == nil
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Inquiry{}, ErrNotFound
+		}
 		return Inquiry{}, err
 	}
-	if hasAppointment && appt.ArtistID != artist.ID {
+	if appt.ArtistID != artist.ID {
 		return Inquiry{}, ErrNotFound
 	}
 
 	duration := int32Value(input.DurationMinutes)
 	if duration <= 0 {
-		if !hasAppointment {
-			return Inquiry{}, ErrInvalidSchedule
-		}
 		duration = appt.DurationMinutes
 	}
 
@@ -263,26 +262,13 @@ func (s *service) RescheduleAppointment(ctx context.Context, userID, inquiryID u
 		return Inquiry{}, err
 	}
 
-	var synced sqlc.Appointment
-	if hasAppointment {
-		synced, err = s.repo.UpdateAppointmentSchedule(ctx, sqlc.UpdateAppointmentScheduleParams{
-			ID:              appt.ID,
-			ArtistID:        artist.ID,
-			ScheduledStart:  start,
-			DurationMinutes: input.DurationMinutes,
-			Format:          input.Format,
-		})
-	} else {
-		synced, err = s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
-			ArtistID:         artist.ID,
-			BookingRequestID: inquiryID,
-			Type:             string(AppointmentSession),
-			Status:           appointmentScheduled,
-			ScheduledStart:   start,
-			DurationMinutes:  duration,
-			SchedulingOrigin: originArtistSet,
-		})
-	}
+	synced, err := s.repo.UpdateAppointmentSchedule(ctx, sqlc.UpdateAppointmentScheduleParams{
+		ID:              appt.ID,
+		ArtistID:        artist.ID,
+		ScheduledStart:  start,
+		DurationMinutes: input.DurationMinutes,
+		Format:          input.Format,
+	})
 	if err != nil {
 		return Inquiry{}, err
 	}
@@ -306,9 +292,7 @@ func (s *service) CancelBooking(ctx context.Context, userID, inquiryID uuid.UUID
 		return Inquiry{}, err
 	}
 	if len(live) == 0 {
-		return s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
-			Status: "cancelled",
-		})
+		return Inquiry{}, ErrNotFound
 	}
 
 	target := live[len(live)-1]

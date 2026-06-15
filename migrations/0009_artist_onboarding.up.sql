@@ -1,1 +1,0 @@
-ALTER TABLE artists ADD COLUMN onboarded_at TIMESTAMPTZ;
