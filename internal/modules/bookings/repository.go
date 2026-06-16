@@ -35,6 +35,7 @@ type Repository interface {
 	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (sqlc.Appointment, error)
 	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.Appointment, error)
 	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.Appointment, error)
+	ListAppointmentsByArtistInRange(ctx context.Context, params sqlc.ListAppointmentsByArtistInRangeParams) ([]sqlc.ListAppointmentsByArtistInRangeRow, error)
 	UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error)
 	UpdateAppointmentStatus(ctx context.Context, params sqlc.UpdateAppointmentStatusParams) (sqlc.Appointment, error)
 	SetAppointmentCalendarEvent(ctx context.Context, params sqlc.SetAppointmentCalendarEventParams) error
@@ -116,6 +117,10 @@ func (r *repository) ListLiveAppointmentsByRequest(ctx context.Context, bookingR
 
 func (r *repository) ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.Appointment, error) {
 	return r.q.ListLatestAppointmentsByArtist(ctx, artistID)
+}
+
+func (r *repository) ListAppointmentsByArtistInRange(ctx context.Context, params sqlc.ListAppointmentsByArtistInRangeParams) ([]sqlc.ListAppointmentsByArtistInRangeRow, error) {
+	return r.q.ListAppointmentsByArtistInRange(ctx, params)
 }
 
 func (r *repository) UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error) {

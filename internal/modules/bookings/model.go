@@ -2,6 +2,7 @@ package bookings
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -76,7 +77,7 @@ type Inquiry struct {
 	SchedulingMode     string               `json:"schedulingMode"`
 	ArtistAvailability []AvailabilityWindow `json:"artistAvailability"`
 	Appointment        *Appointment         `json:"appointment,omitempty"`
-	LiveAppointments []Appointment `json:"liveAppointments"`
+	LiveAppointments   []Appointment        `json:"liveAppointments"`
 }
 
 // AvailabilityWindow is one of the artist's recurring weekly working spans,
@@ -97,6 +98,19 @@ type Appointment struct {
 	DurationMinutes  int32   `json:"durationMinutes"`
 	Format           *string `json:"format,omitempty"`
 	SchedulingOrigin string  `json:"schedulingOrigin"`
+}
+
+type CalendarEvent struct {
+	ID               string  `json:"id"`
+	BookingRequestID string  `json:"bookingRequestId"`
+	Type             string  `json:"type"`
+	Status           string  `json:"status"`
+	ClientName       string  `json:"clientName"`
+	LocationLabel    string  `json:"locationLabel"`
+	LocationAddress  string  `json:"locationAddress"`
+	ScheduledStart   string  `json:"scheduledStart"`
+	DurationMinutes  int32   `json:"durationMinutes"`
+	Format           *string `json:"format,omitempty"`
 }
 
 // InquiryFlash is the claimed flash's display info, shown on a flash inquiry.
@@ -129,32 +143,39 @@ type InquiryListResponse struct {
 
 // ── Request payloads ─────────────────────────────────────────────────────────
 
-// AcceptInput accepts an inquiry and schedules the session. The artist supplies
-// the session length in both modes; ScheduledStart is required for
-// artist_scheduled (the artist places them) and ignored for client_scheduled
-// (the client picks their own start later).
 type AcceptInput struct {
 	SessionDurationMinutes *int32     `json:"sessionDurationMinutes"`
 	ScheduledStart         *time.Time `json:"scheduledStart"`
 }
 
-// RequestConsultationInput requests a consultation before accepting. Length and
-// format are chosen per request (defaulting to 30 minutes / in person);
-// ScheduledStart is the proposed time for artist_scheduled and omitted for
-// client_scheduled.
+
 type RequestConsultationInput struct {
 	ScheduledStart  *time.Time `json:"scheduledStart"`
 	DurationMinutes *int32     `json:"durationMinutes"`
 	Format          *string    `json:"format"`
 }
 
-// RescheduleInput moves an already-scheduled appointment to a new time. A
-// session may resize via DurationMinutes; a consultation may also re-pick its
-// length and Format. Omitted fields are kept as-is.
+
 type RescheduleInput struct {
 	ScheduledStart  *time.Time `json:"scheduledStart"`
 	DurationMinutes *int32     `json:"durationMinutes"`
 	Format          *string    `json:"format"`
+}
+
+type CreateAppointmentInput struct {
+	Type            string     `json:"type"`
+	Format          *string    `json:"format"`
+	ClientName      string     `json:"clientName"`
+	ClientEmail     string     `json:"clientEmail"`
+	ClientPhone     string     `json:"clientPhone"`
+	ScheduledStart  *time.Time `json:"scheduledStart"`
+	DurationMinutes int32      `json:"durationMinutes"`
+	LocationID      *string    `json:"locationId"`
+
+	Placement        string `json:"placement"`
+	ApproxSizeInches *int32 `json:"approxSizeInches"`
+	ColorType        string `json:"colorType"`
+	Description      string `json:"description"`
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────
@@ -247,6 +268,33 @@ func appointmentFromRow(a sqlc.Appointment) *Appointment {
 		out.ScheduledStart = &s
 	}
 	return out
+}
+
+func calendarEventFromRow(r sqlc.ListAppointmentsByArtistInRangeRow) CalendarEvent {
+	return CalendarEvent{
+		ID:               r.ID.String(),
+		BookingRequestID: r.BookingRequestID.String(),
+		Type:             r.Type,
+		Status:           r.Status,
+		ClientName:       r.ClientName,
+		LocationLabel:    r.LocationLabel,
+		LocationAddress:  joinNonEmpty(", ", r.LocationAddress, r.LocationCity),
+		ScheduledStart:   r.ScheduledStart.Time.UTC().Format(time.RFC3339),
+		DurationMinutes:  r.DurationMinutes,
+		Format:           r.Format,
+	}
+}
+
+// joinNonEmpty joins the non-blank parts with sep, e.g. a street and city into
+// a single address line.
+func joinNonEmpty(sep string, parts ...string) string {
+	kept := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if strings.TrimSpace(p) != "" {
+			kept = append(kept, p)
+		}
+	}
+	return strings.Join(kept, sep)
 }
 
 func statsFromRow(row sqlc.GetBookingStatsRow) BookingStats {
