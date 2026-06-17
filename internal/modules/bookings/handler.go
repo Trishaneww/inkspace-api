@@ -35,6 +35,19 @@ func (h *Handler) List(c *gin.Context) {
 	httpx.OK(c, resp)
 }
 
+func (h *Handler) ListForClient(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.ListClientInquiries(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, resp)
+}
+
 func (h *Handler) Calendar(c *gin.Context) {
 	userID, ok := requireUserID(c)
 	if !ok {

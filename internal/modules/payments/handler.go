@@ -121,11 +121,12 @@ func (h *Handler) CreateClientAccount(c *gin.Context) {
 		httpx.Error(c, http.StatusBadRequest, "invalid_input", "invalid request body")
 		return
 	}
-	if err := h.svc.CreateClientAccount(c.Request.Context(), c.Param("token"), input); err != nil {
+	session, err := h.svc.CreateClientAccount(c.Request.Context(), c.Param("token"), input)
+	if err != nil {
 		respondError(c, err)
 		return
 	}
-	httpx.Created(c, gin.H{"created": true})
+	httpx.Created(c, session)
 }
 
 func (h *Handler) Webhook(c *gin.Context) {

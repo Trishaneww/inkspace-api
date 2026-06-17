@@ -62,6 +62,37 @@ type CreateClientAccountInput struct {
 	MarketingOptIn bool   `json:"marketingOptIn"`
 }
 
+type ClientSession struct {
+	Token        string      `json:"token"`
+	RefreshToken string      `json:"refreshToken"`
+	User         SessionUser `json:"user"`
+}
+
+type SessionUser struct {
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	CreatedAt string `json:"createdAt"`
+}
+
+func sessionUserFromRecord(u sqlc.User) SessionUser {
+	out := SessionUser{
+		ID:        u.ID.String(),
+		Email:     u.Email,
+		Role:      u.Role,
+		CreatedAt: formatTimestamp(u.CreatedAt),
+	}
+	if u.FirstName != nil {
+		out.FirstName = *u.FirstName
+	}
+	if u.LastName != nil {
+		out.LastName = *u.LastName
+	}
+	return out
+}
+
 type CheckoutResponse struct {
 	URL string `json:"url"`
 }

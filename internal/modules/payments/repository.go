@@ -16,6 +16,7 @@ type Repository interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error)
 	GetUserByEmail(ctx context.Context, email string) (sqlc.User, error)
 	CreateUser(ctx context.Context, params sqlc.CreateUserParams) (sqlc.User, error)
+	CreateRefreshToken(ctx context.Context, params sqlc.CreateRefreshTokenParams) (sqlc.RefreshToken, error)
 	SetUserMarketingOptIn(ctx context.Context, params sqlc.SetUserMarketingOptInParams) error
 	LinkBookingRequestsToClient(ctx context.Context, params sqlc.LinkBookingRequestsToClientParams) error
 	GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error)
@@ -69,6 +70,10 @@ func (r *repository) GetUserByEmail(ctx context.Context, email string) (sqlc.Use
 
 func (r *repository) CreateUser(ctx context.Context, params sqlc.CreateUserParams) (sqlc.User, error) {
 	return r.q.CreateUser(ctx, params)
+}
+
+func (r *repository) CreateRefreshToken(ctx context.Context, params sqlc.CreateRefreshTokenParams) (sqlc.RefreshToken, error) {
+	return r.q.CreateRefreshToken(ctx, params)
 }
 
 func (r *repository) SetUserMarketingOptIn(ctx context.Context, params sqlc.SetUserMarketingOptInParams) error {
