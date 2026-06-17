@@ -16,6 +16,8 @@ type Querier interface {
 	AddDayOff(ctx context.Context, arg AddDayOffParams) error
 	ArchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	ArchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
+	AttachCheckoutSession(ctx context.Context, arg AttachCheckoutSessionParams) (PaymentRequest, error)
+	CancelPaymentRequest(ctx context.Context, arg CancelPaymentRequestParams) (PaymentRequest, error)
 	ClaimFlash(ctx context.Context, arg ClaimFlashParams) (Flash, error)
 	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
@@ -24,6 +26,7 @@ type Querier interface {
 	CloseArtistLocation(ctx context.Context, arg CloseArtistLocationParams) error
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
+	CountLivePaymentRequests(ctx context.Context, arg CountLivePaymentRequestsParams) (int64, error)
 	// Counts the artist's live, time-locked appointments whose [start, start+duration)
 	// window overlaps the proposed one — used to block double-booking. Proposed
 	// client-scheduled slots (NULL start) and cancelled/no-show slots never conflict.
@@ -35,13 +38,12 @@ type Querier interface {
 	CreateBookingRequest(ctx context.Context, arg CreateBookingRequestParams) (BookingRequest, error)
 	CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash, error)
 	CreateOpenBook(ctx context.Context, arg CreateOpenBookParams) (OpenBook, error)
+	CreatePaymentRequest(ctx context.Context, arg CreatePaymentRequestParams) (PaymentRequest, error)
 	CreatePhoneVerification(ctx context.Context, arg CreatePhoneVerificationParams) (PhoneVerification, error)
 	CreatePortfolioItem(ctx context.Context, arg CreatePortfolioItemParams) (PortfolioItem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSessionPreset(ctx context.Context, arg CreateSessionPresetParams) (ArtistSessionPreset, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	// Once one request claims a flash, auto-decline the other pending requests
-	// competing for the same flash (used for non-repeatable flashes).
 	DeclineOtherFlashRequests(ctx context.Context, arg DeclineOtherFlashRequestsParams) error
 	DeleteAllAvailabilityWindows(ctx context.Context, artistID uuid.UUID) error
 	DeleteAllFlashPricingTiers(ctx context.Context, flashID uuid.UUID) error
@@ -56,6 +58,7 @@ type Querier interface {
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
+	GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
 	GetArtistLocation(ctx context.Context, arg GetArtistLocationParams) (ArtistLocation, error)
 	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
@@ -69,6 +72,9 @@ type Querier interface {
 	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
 	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
+	GetPaymentRequestByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error)
+	GetPaymentRequestByToken(ctx context.Context, publicToken string) (PaymentRequest, error)
+	GetPaymentRequestForArtist(ctx context.Context, arg GetPaymentRequestForArtistParams) (PaymentRequest, error)
 	GetPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	GetPrimaryLocation(ctx context.Context, artistID uuid.UUID) (ArtistLocation, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -77,6 +83,7 @@ type Querier interface {
 	GetUserByUsername(ctx context.Context, username *string) (User, error)
 	IncrementFlashViewCount(ctx context.Context, id uuid.UUID) error
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
+	LinkBookingRequestsToClient(ctx context.Context, arg LinkBookingRequestsToClientParams) error
 	// Every location including closed ones, so a booking request can always
 	// resolve the spot it was tagged with even after the artist closes it.
 	ListAllArtistLocations(ctx context.Context, artistID uuid.UUID) ([]ArtistLocation, error)
@@ -100,13 +107,21 @@ type Querier interface {
 	// inbox list can show the scheduled/proposed state without an N+1 lookup.
 	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]Appointment, error)
 	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]Appointment, error)
+	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]PaymentRequest, error)
+	ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]PaymentRequest, error)
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
+	MarkPaymentRequestEmailed(ctx context.Context, arg MarkPaymentRequestEmailedParams) (PaymentRequest, error)
+	MarkPaymentRequestExpiredBySession(ctx context.Context, stripeCheckoutSessionID *string) (PaymentRequest, error)
+	MarkPaymentRequestFailedByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error)
+	MarkPaymentRequestPaidByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error)
+	MarkPaymentRequestPaidBySession(ctx context.Context, arg MarkPaymentRequestPaidBySessionParams) (PaymentRequest, error)
 	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
 	PublishFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	PublishPortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	RefreshPhoneVerificationCode(ctx context.Context, arg RefreshPhoneVerificationCodeParams) error
+	RefundPaymentRequestByPaymentIntent(ctx context.Context, arg RefundPaymentRequestByPaymentIntentParams) (PaymentRequest, error)
 	RemoveBlocklistEntry(ctx context.Context, arg RemoveBlocklistEntryParams) error
 	RemoveDayOff(ctx context.Context, arg RemoveDayOffParams) error
 	ReopenBookingRequest(ctx context.Context, arg ReopenBookingRequestParams) (BookingRequest, error)
@@ -115,9 +130,11 @@ type Querier interface {
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	SetAppointmentCalendarEvent(ctx context.Context, arg SetAppointmentCalendarEventParams) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
+	SetBookingDepositStatus(ctx context.Context, arg SetBookingDepositStatusParams) error
 	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
+	SetUserMarketingOptIn(ctx context.Context, arg SetUserMarketingOptInParams) error
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	UpdateAppointmentSchedule(ctx context.Context, arg UpdateAppointmentScheduleParams) (Appointment, error)

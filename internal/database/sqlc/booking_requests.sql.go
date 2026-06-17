@@ -124,8 +124,6 @@ type DeclineOtherFlashRequestsParams struct {
 	ExcludeID uuid.UUID   `json:"exclude_id"`
 }
 
-// Once one request claims a flash, auto-decline the other pending requests
-// competing for the same flash (used for non-repeatable flashes).
 func (q *Queries) DeclineOtherFlashRequests(ctx context.Context, arg DeclineOtherFlashRequestsParams) error {
 	_, err := q.db.Exec(ctx, declineOtherFlashRequests, arg.ArtistID, arg.FlashID, arg.ExcludeID)
 	return err
@@ -214,7 +212,6 @@ type LinkBookingRequestsToClientParams struct {
 	ClientEmail  string      `json:"client_email"`
 }
 
-// Attaches a newly-created client account to all of that email's bookings.
 func (q *Queries) LinkBookingRequestsToClient(ctx context.Context, arg LinkBookingRequestsToClientParams) error {
 	_, err := q.db.Exec(ctx, linkBookingRequestsToClient, arg.ClientUserID, arg.ClientEmail)
 	return err
