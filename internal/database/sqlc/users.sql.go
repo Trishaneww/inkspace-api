@@ -52,7 +52,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, role, first_name, last_name, phone, username, instagram_url)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source
 `
 
 type CreateUserParams struct {
@@ -93,6 +93,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Username,
 		&i.AvatarURL,
 		&i.InstagramURL,
+		&i.MarketingOptInAt,
+		&i.MarketingOptInSource,
 	)
 	return i, err
 }
@@ -143,7 +145,7 @@ func (q *Queries) GetActiveRefreshTokenByHash(ctx context.Context, tokenHash str
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url FROM users WHERE email = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -164,12 +166,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Username,
 		&i.AvatarURL,
 		&i.InstagramURL,
+		&i.MarketingOptInAt,
+		&i.MarketingOptInSource,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url FROM users WHERE id = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -190,12 +194,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Username,
 		&i.AvatarURL,
 		&i.InstagramURL,
+		&i.MarketingOptInAt,
+		&i.MarketingOptInSource,
 	)
 	return i, err
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url FROM users WHERE phone = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source FROM users WHERE phone = $1
 `
 
 func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, error) {
@@ -216,6 +222,8 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, erro
 		&i.Username,
 		&i.AvatarURL,
 		&i.InstagramURL,
+		&i.MarketingOptInAt,
+		&i.MarketingOptInSource,
 	)
 	return i, err
 }
@@ -266,6 +274,24 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, tokenHash string) erro
 	return err
 }
 
+const setUserMarketingOptIn = `-- name: SetUserMarketingOptIn :exec
+UPDATE users
+SET marketing_opt_in_at = now(),
+    marketing_opt_in_source = $1,
+    updated_at = now()
+WHERE id = $2
+`
+
+type SetUserMarketingOptInParams struct {
+	Source *string   `json:"source"`
+	ID     uuid.UUID `json:"id"`
+}
+
+func (q *Queries) SetUserMarketingOptIn(ctx context.Context, arg SetUserMarketingOptInParams) error {
+	_, err := q.db.Exec(ctx, setUserMarketingOptIn, arg.Source, arg.ID)
+	return err
+}
+
 const updateUnverifiedUser = `-- name: UpdateUnverifiedUser :one
 UPDATE users
 SET password_hash = $2,
@@ -277,7 +303,7 @@ SET password_hash = $2,
     instagram_url = $8,
     updated_at    = now()
 WHERE id = $1 AND phone_verified_at IS NULL
-RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source
 `
 
 type UpdateUnverifiedUserParams struct {
@@ -318,6 +344,8 @@ func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverified
 		&i.Username,
 		&i.AvatarURL,
 		&i.InstagramURL,
+		&i.MarketingOptInAt,
+		&i.MarketingOptInSource,
 	)
 	return i, err
 }
