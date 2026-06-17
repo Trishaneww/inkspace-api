@@ -6,6 +6,9 @@ ON CONFLICT (user_id) DO NOTHING;
 -- name: GetArtistByUserID :one
 SELECT * FROM artists WHERE user_id = $1;
 
+-- name: GetArtistByID :one
+SELECT * FROM artists WHERE id = $1;
+
 -- name: SetArtistOnboardedAt :exec
 UPDATE artists
 SET onboarded_at = now(),

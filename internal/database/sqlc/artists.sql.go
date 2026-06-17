@@ -23,6 +23,23 @@ func (q *Queries) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
 	return err
 }
 
+const getArtistByID = `-- name: GetArtistByID :one
+SELECT id, user_id, created_at, updated_at, onboarded_at FROM artists WHERE id = $1
+`
+
+func (q *Queries) GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error) {
+	row := q.db.QueryRow(ctx, getArtistByID, id)
+	var i Artist
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OnboardedAt,
+	)
+	return i, err
+}
+
 const getArtistByUserID = `-- name: GetArtistByUserID :one
 SELECT id, user_id, created_at, updated_at, onboarded_at FROM artists WHERE user_id = $1
 `

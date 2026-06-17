@@ -24,8 +24,6 @@ FROM booking_requests
 WHERE id = $1 AND artist_id = $2;
 
 -- name: DeclineOtherFlashRequests :exec
--- Once one request claims a flash, auto-decline the other pending requests
--- competing for the same flash (used for non-repeatable flashes).
 UPDATE booking_requests
 SET status     = 'declined',
     decided_at = now(),
@@ -64,3 +62,10 @@ SELECT
     )                                                  AS booked_this_month
 FROM booking_requests
 WHERE artist_id = $1;
+
+-- name: LinkBookingRequestsToClient :exec
+UPDATE booking_requests
+SET client_user_id = @client_user_id,
+    updated_at = now()
+WHERE client_email = @client_email
+  AND client_user_id IS NULL;

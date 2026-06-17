@@ -70,3 +70,10 @@ WHERE user_id = $1 AND revoked_at IS NULL;
 -- name: DeleteExpiredRefreshTokens :execrows
 DELETE FROM refresh_tokens
 WHERE expires_at < now() - INTERVAL '7 days';
+
+-- name: SetUserMarketingOptIn :exec
+UPDATE users
+SET marketing_opt_in_at = now(),
+    marketing_opt_in_source = @source,
+    updated_at = now()
+WHERE id = @id;

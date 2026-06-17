@@ -40,6 +40,9 @@ type Repository interface {
 	UpdateAppointmentStatus(ctx context.Context, params sqlc.UpdateAppointmentStatusParams) (sqlc.Appointment, error)
 	SetAppointmentCalendarEvent(ctx context.Context, params sqlc.SetAppointmentCalendarEventParams) error
 	CountOverlappingAppointments(ctx context.Context, params sqlc.CountOverlappingAppointmentsParams) (int64, error)
+
+	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.PaymentRequest, error)
+	ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.PaymentRequest, error)
 }
 
 type repository struct {
@@ -149,4 +152,12 @@ func (r *repository) ClaimFlash(ctx context.Context, params sqlc.ClaimFlashParam
 
 func (r *repository) DeclineOtherFlashRequests(ctx context.Context, params sqlc.DeclineOtherFlashRequestsParams) error {
 	return r.q.DeclineOtherFlashRequests(ctx, params)
+}
+
+func (r *repository) ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.PaymentRequest, error) {
+	return r.q.ListPaymentRequestsByArtist(ctx, artistID)
+}
+
+func (r *repository) ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.PaymentRequest, error) {
+	return r.q.ListPaymentRequestsByBooking(ctx, bookingRequestID)
 }

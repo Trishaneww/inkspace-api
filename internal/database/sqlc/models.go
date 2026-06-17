@@ -194,6 +194,32 @@ type OpenBook struct {
 	CustomQuestions []byte             `json:"custom_questions"`
 }
 
+type PaymentRequest struct {
+	ID                      uuid.UUID          `json:"id"`
+	ArtistID                uuid.UUID          `json:"artist_id"`
+	BookingRequestID        uuid.UUID          `json:"booking_request_id"`
+	Type                    string             `json:"type"`
+	Status                  string             `json:"status"`
+	Currency                string             `json:"currency"`
+	AmountCents             int64              `json:"amount_cents"`
+	PlatformFeeCents        int64              `json:"platform_fee_cents"`
+	ClientChargeCents       int64              `json:"client_charge_cents"`
+	FeePayer                string             `json:"fee_payer"`
+	AmountRefundedCents     int64              `json:"amount_refunded_cents"`
+	ClientEmail             string             `json:"client_email"`
+	ClientName              string             `json:"client_name"`
+	Description             string             `json:"description"`
+	PublicToken             string             `json:"public_token"`
+	StripeCheckoutSessionID *string            `json:"stripe_checkout_session_id"`
+	StripePaymentIntentID   *string            `json:"stripe_payment_intent_id"`
+	ExpiresAt               pgtype.Timestamptz `json:"expires_at"`
+	PaidAt                  pgtype.Timestamptz `json:"paid_at"`
+	CanceledAt              pgtype.Timestamptz `json:"canceled_at"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	LastEmailedAt           pgtype.Timestamptz `json:"last_emailed_at"`
+}
+
 type PhoneVerification struct {
 	ID         uuid.UUID          `json:"id"`
 	UserID     uuid.UUID          `json:"user_id"`
@@ -237,19 +263,27 @@ type RefreshToken struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type StripeEvent struct {
+	ID         string             `json:"id"`
+	Type       string             `json:"type"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+}
+
 type User struct {
-	ID              uuid.UUID          `json:"id"`
-	Email           string             `json:"email"`
-	PasswordHash    string             `json:"password_hash"`
-	Role            string             `json:"role"`
-	EmailVerifiedAt pgtype.Timestamptz `json:"email_verified_at"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	FirstName       *string            `json:"first_name"`
-	LastName        *string            `json:"last_name"`
-	Phone           *string            `json:"phone"`
-	PhoneVerifiedAt pgtype.Timestamptz `json:"phone_verified_at"`
-	Username        *string            `json:"username"`
-	AvatarURL       *string            `json:"avatar_url"`
-	InstagramURL    *string            `json:"instagram_url"`
+	ID                   uuid.UUID          `json:"id"`
+	Email                string             `json:"email"`
+	PasswordHash         string             `json:"password_hash"`
+	Role                 string             `json:"role"`
+	EmailVerifiedAt      pgtype.Timestamptz `json:"email_verified_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	FirstName            *string            `json:"first_name"`
+	LastName             *string            `json:"last_name"`
+	Phone                *string            `json:"phone"`
+	PhoneVerifiedAt      pgtype.Timestamptz `json:"phone_verified_at"`
+	Username             *string            `json:"username"`
+	AvatarURL            *string            `json:"avatar_url"`
+	InstagramURL         *string            `json:"instagram_url"`
+	MarketingOptInAt     pgtype.Timestamptz `json:"marketing_opt_in_at"`
+	MarketingOptInSource *string            `json:"marketing_opt_in_source"`
 }

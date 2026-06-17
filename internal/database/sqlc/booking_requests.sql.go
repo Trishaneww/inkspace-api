@@ -124,8 +124,6 @@ type DeclineOtherFlashRequestsParams struct {
 	ExcludeID uuid.UUID   `json:"exclude_id"`
 }
 
-// Once one request claims a flash, auto-decline the other pending requests
-// competing for the same flash (used for non-repeatable flashes).
 func (q *Queries) DeclineOtherFlashRequests(ctx context.Context, arg DeclineOtherFlashRequestsParams) error {
 	_, err := q.db.Exec(ctx, declineOtherFlashRequests, arg.ArtistID, arg.FlashID, arg.ExcludeID)
 	return err
@@ -199,6 +197,24 @@ func (q *Queries) GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetB
 	var i GetBookingStatsRow
 	err := row.Scan(&i.NewInquiries, &i.AwaitingDeposit, &i.BookedThisMonth)
 	return i, err
+}
+
+const linkBookingRequestsToClient = `-- name: LinkBookingRequestsToClient :exec
+UPDATE booking_requests
+SET client_user_id = $1,
+    updated_at = now()
+WHERE client_email = $2
+  AND client_user_id IS NULL
+`
+
+type LinkBookingRequestsToClientParams struct {
+	ClientUserID pgtype.UUID `json:"client_user_id"`
+	ClientEmail  string      `json:"client_email"`
+}
+
+func (q *Queries) LinkBookingRequestsToClient(ctx context.Context, arg LinkBookingRequestsToClientParams) error {
+	_, err := q.db.Exec(ctx, linkBookingRequestsToClient, arg.ClientUserID, arg.ClientEmail)
+	return err
 }
 
 const listBookingRequestsByArtist = `-- name: ListBookingRequestsByArtist :many
