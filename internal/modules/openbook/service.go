@@ -492,6 +492,7 @@ func (s *service) buildProfile(
 		InstagramURL:      derefString(user.InstagramURL),
 		AcceptingBookings: settings.AcceptingBookings,
 		SchedulingMode:    openBook.SchedulingMode,
+		Theme:             openBook.Theme,
 		Styles:            settings.Styles,
 		CustomQuestions:   parseStringList(openBook.CustomQuestions),
 		Aftercare:         settings.Aftercare,

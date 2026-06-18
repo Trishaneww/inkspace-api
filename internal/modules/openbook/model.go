@@ -17,6 +17,7 @@ type Profile struct {
 	Locations         []PublicLocation     `json:"locations"`
 	HasFlashes        bool                 `json:"hasFlashes"`
 	HasPortfolio      bool                 `json:"hasPortfolio"`
+	Theme             string               `json:"theme"`
 }
 
 type PublicLocation struct {

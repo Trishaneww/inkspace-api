@@ -14,7 +14,7 @@ import (
 const createOpenBook = `-- name: CreateOpenBook :one
 INSERT INTO open_books (artist_id, slug, scheduling_mode)
 VALUES ($1, $2, $3)
-RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions
+RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme
 `
 
 type CreateOpenBookParams struct {
@@ -34,12 +34,13 @@ func (q *Queries) CreateOpenBook(ctx context.Context, arg CreateOpenBookParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CustomQuestions,
+		&i.Theme,
 	)
 	return i, err
 }
 
 const getOpenBookByArtist = `-- name: GetOpenBookByArtist :one
-SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions FROM open_books WHERE artist_id = $1
+SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme FROM open_books WHERE artist_id = $1
 `
 
 func (q *Queries) GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error) {
@@ -53,12 +54,13 @@ func (q *Queries) GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CustomQuestions,
+		&i.Theme,
 	)
 	return i, err
 }
 
 const getOpenBookBySlug = `-- name: GetOpenBookBySlug :one
-SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions FROM open_books WHERE slug = $1
+SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme FROM open_books WHERE slug = $1
 `
 
 func (q *Queries) GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error) {
@@ -72,6 +74,7 @@ func (q *Queries) GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CustomQuestions,
+		&i.Theme,
 	)
 	return i, err
 }
@@ -81,15 +84,17 @@ UPDATE open_books
 SET slug             = COALESCE($1::citext, slug),
     scheduling_mode  = COALESCE($2::text, scheduling_mode),
     custom_questions = COALESCE($3::jsonb, custom_questions),
+    theme            = COALESCE($4::text, theme),
     updated_at       = now()
-WHERE artist_id = $4
-RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions
+WHERE artist_id = $5
+RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme
 `
 
 type UpdateOpenBookParams struct {
 	Slug            *string   `json:"slug"`
 	SchedulingMode  *string   `json:"scheduling_mode"`
 	CustomQuestions []byte    `json:"custom_questions"`
+	Theme           *string   `json:"theme"`
 	ArtistID        uuid.UUID `json:"artist_id"`
 }
 
@@ -98,6 +103,7 @@ func (q *Queries) UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) 
 		arg.Slug,
 		arg.SchedulingMode,
 		arg.CustomQuestions,
+		arg.Theme,
 		arg.ArtistID,
 	)
 	var i OpenBook
@@ -109,6 +115,7 @@ func (q *Queries) UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CustomQuestions,
+		&i.Theme,
 	)
 	return i, err
 }

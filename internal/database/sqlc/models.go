@@ -192,6 +192,7 @@ type OpenBook struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	CustomQuestions []byte             `json:"custom_questions"`
+	Theme           string             `json:"theme"`
 }
 
 type PaymentRequest struct {

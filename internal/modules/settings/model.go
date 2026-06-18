@@ -303,14 +303,25 @@ type UsernameAvailabilityResponse struct {
 }
 
 // ── Open Book ────────────────────────────────────────────────────────────────
+var OpenBookThemes = map[string]bool{
+	"inkspace": true,
+	"noir":     true,
+	"sand":     true,
+	"sage":     true,
+	"midnight": true,
+	"navy":     true,
+}
+
 type OpenBookResponse struct {
 	Slug            string   `json:"slug"`
 	SchedulingMode  string   `json:"schedulingMode"`
 	CustomQuestions []string `json:"customQuestions"`
+	Theme           string   `json:"theme"`
 }
 
 type UpdateOpenBookInput struct {
 	Slug            *string   `json:"slug"`
 	SchedulingMode  *string   `json:"schedulingMode"`
 	CustomQuestions *[]string `json:"customQuestions"`
+	Theme           *string   `json:"theme"`
 }
