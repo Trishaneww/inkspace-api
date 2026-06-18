@@ -32,8 +32,8 @@ type Config struct {
 
 	LoginMaxFailures   int
 	LoginLockoutWindow time.Duration
-	RateLimitOTPRPS   float64
-	RateLimitOTPBurst int
+	RateLimitOTPRPS    float64
+	RateLimitOTPBurst  int
 
 	JWTSecret     string
 	JWTAccessTTL  time.Duration
@@ -59,8 +59,11 @@ type Config struct {
 	AWSSecretAccessKey string
 	AWSS3Bucket        string
 
-	StripeSecretKey     string
-	StripeWebhookSecret string
+	StripeSecretKey             string
+	StripeWebhookSecret         string
+	StripePaymentsWebhookSecret string
+
+	InternalEmailSecret string
 }
 
 func Load() (*Config, error) {
@@ -86,7 +89,7 @@ func Load() (*Config, error) {
 		RateLimitAuthBurst:   getEnvInt("RATE_LIMIT_AUTH_BURST", 10),
 		MaxRequestBodyBytes:  getEnvInt64("MAX_REQUEST_BODY_BYTES", 1<<20),
 
-		LoginMaxFailures: getEnvInt("LOGIN_MAX_FAILURES", 5),
+		LoginMaxFailures:  getEnvInt("LOGIN_MAX_FAILURES", 5),
 		RateLimitOTPRPS:   getEnvFloat("RATE_LIMIT_OTP_RPS", 0.0083),
 		RateLimitOTPBurst: getEnvInt("RATE_LIMIT_OTP_BURST", 4),
 
@@ -107,8 +110,11 @@ func Load() (*Config, error) {
 		AWSSecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
 		AWSS3Bucket:        os.Getenv("AWS_S3_BUCKET"),
 
-		StripeSecretKey:     os.Getenv("STRIPE_SECRET_KEY"),
-		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		StripeSecretKey:             os.Getenv("STRIPE_SECRET_KEY"),
+		StripeWebhookSecret:         os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		StripePaymentsWebhookSecret: os.Getenv("STRIPE_PAYMENTS_WEBHOOK_SECRET"),
+
+		InternalEmailSecret: os.Getenv("INTERNAL_EMAIL_SECRET"),
 	}
 
 	if cfg.DatabaseURL == "" {

@@ -124,8 +124,6 @@ type DeclineOtherFlashRequestsParams struct {
 	ExcludeID uuid.UUID   `json:"exclude_id"`
 }
 
-// Once one request claims a flash, auto-decline the other pending requests
-// competing for the same flash (used for non-repeatable flashes).
 func (q *Queries) DeclineOtherFlashRequests(ctx context.Context, arg DeclineOtherFlashRequestsParams) error {
 	_, err := q.db.Exec(ctx, declineOtherFlashRequests, arg.ArtistID, arg.FlashID, arg.ExcludeID)
 	return err
@@ -201,6 +199,24 @@ func (q *Queries) GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetB
 	return i, err
 }
 
+const linkBookingRequestsToClient = `-- name: LinkBookingRequestsToClient :exec
+UPDATE booking_requests
+SET client_user_id = $1,
+    updated_at = now()
+WHERE client_email = $2
+  AND client_user_id IS NULL
+`
+
+type LinkBookingRequestsToClientParams struct {
+	ClientUserID pgtype.UUID `json:"client_user_id"`
+	ClientEmail  string      `json:"client_email"`
+}
+
+func (q *Queries) LinkBookingRequestsToClient(ctx context.Context, arg LinkBookingRequestsToClientParams) error {
+	_, err := q.db.Exec(ctx, linkBookingRequestsToClient, arg.ClientUserID, arg.ClientEmail)
+	return err
+}
+
 const listBookingRequestsByArtist = `-- name: ListBookingRequestsByArtist :many
 SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
 FROM booking_requests
@@ -210,6 +226,60 @@ ORDER BY created_at DESC
 
 func (q *Queries) ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error) {
 	rows, err := q.db.Query(ctx, listBookingRequestsByArtist, artistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BookingRequest
+	for rows.Next() {
+		var i BookingRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.ArtistID,
+			&i.OpenBookID,
+			&i.Type,
+			&i.FlashID,
+			&i.Description,
+			&i.ReferenceImageKeys,
+			&i.Placement,
+			&i.ApproxSizeInches,
+			&i.ClientAvailability,
+			&i.ClientName,
+			&i.ClientEmail,
+			&i.ClientPhone,
+			&i.Status,
+			&i.DepositStatus,
+			&i.WaiverStatus,
+			&i.SessionDurationMinutes,
+			&i.ClientUserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DecidedAt,
+			&i.Styles,
+			&i.CustomAnswers,
+			&i.ColorType,
+			&i.LocationID,
+			&i.FlashSizeCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBookingRequestsByClientEmail = `-- name: ListBookingRequestsByClientEmail :many
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
+FROM booking_requests
+WHERE client_email = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]BookingRequest, error) {
+	rows, err := q.db.Query(ctx, listBookingRequestsByClientEmail, clientEmail)
 	if err != nil {
 		return nil, err
 	}

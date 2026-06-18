@@ -78,6 +78,20 @@ type Inquiry struct {
 	ArtistAvailability []AvailabilityWindow `json:"artistAvailability"`
 	Appointment        *Appointment         `json:"appointment,omitempty"`
 	LiveAppointments   []Appointment        `json:"liveAppointments"`
+
+	Payments []InquiryPayment `json:"payments"`
+}
+
+type InquiryPayment struct {
+	ID                string  `json:"id"`
+	Type              string  `json:"type"`
+	Status            string  `json:"status"`
+	Currency          string  `json:"currency"`
+	AmountCents       int64   `json:"amountCents"`
+	ClientChargeCents int64   `json:"clientChargeCents"`
+	PublicToken       string  `json:"publicToken"`
+	CreatedAt         string  `json:"createdAt"`
+	PaidAt            *string `json:"paidAt,omitempty"`
 }
 
 // AvailabilityWindow is one of the artist's recurring weekly working spans,
@@ -141,6 +155,16 @@ type InquiryListResponse struct {
 	Stats     BookingStats `json:"stats"`
 }
 
+type ClientInquiry struct {
+	Inquiry
+	ArtistName string `json:"artistName"`
+	ArtistSlug string `json:"artistSlug"`
+}
+
+type ClientInquiryListResponse struct {
+	Inquiries []ClientInquiry `json:"inquiries"`
+}
+
 // ── Request payloads ─────────────────────────────────────────────────────────
 
 type AcceptInput struct {
@@ -148,18 +172,18 @@ type AcceptInput struct {
 	ScheduledStart         *time.Time `json:"scheduledStart"`
 }
 
-
 type RequestConsultationInput struct {
 	ScheduledStart  *time.Time `json:"scheduledStart"`
 	DurationMinutes *int32     `json:"durationMinutes"`
 	Format          *string    `json:"format"`
 }
 
-
 type RescheduleInput struct {
 	ScheduledStart  *time.Time `json:"scheduledStart"`
 	DurationMinutes *int32     `json:"durationMinutes"`
 	Format          *string    `json:"format"`
+
+	AppointmentID *string `json:"appointmentId"`
 }
 
 type CreateAppointmentInput struct {
@@ -205,6 +229,7 @@ func inquiryFromRow(row sqlc.BookingRequest) Inquiry {
 	out.ReferenceImageURLs = []string{}
 	out.ArtistAvailability = []AvailabilityWindow{}
 	out.LiveAppointments = []Appointment{}
+	out.Payments = []InquiryPayment{}
 	if out.Styles == nil {
 		out.Styles = []string{}
 	}
@@ -266,6 +291,24 @@ func appointmentFromRow(a sqlc.Appointment) *Appointment {
 	if a.ScheduledStart.Valid {
 		s := a.ScheduledStart.Time.UTC().Format(time.RFC3339)
 		out.ScheduledStart = &s
+	}
+	return out
+}
+
+func paymentFromRow(p sqlc.PaymentRequest) InquiryPayment {
+	out := InquiryPayment{
+		ID:                p.ID.String(),
+		Type:              p.Type,
+		Status:            p.Status,
+		Currency:          p.Currency,
+		AmountCents:       p.AmountCents,
+		ClientChargeCents: p.ClientChargeCents,
+		PublicToken:       p.PublicToken,
+		CreatedAt:         formatTimestamp(p.CreatedAt),
+	}
+	if p.PaidAt.Valid {
+		s := p.PaidAt.Time.UTC().Format(time.RFC3339)
+		out.PaidAt = &s
 	}
 	return out
 }

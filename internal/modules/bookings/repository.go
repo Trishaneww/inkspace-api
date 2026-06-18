@@ -11,6 +11,8 @@ import (
 
 type Repository interface {
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error)
+	GetArtistByID(ctx context.Context, id uuid.UUID) (sqlc.Artist, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error)
 	EnsureArtist(ctx context.Context, userID uuid.UUID) error
 
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
@@ -23,6 +25,7 @@ type Repository interface {
 
 	CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.BookingRequest, error)
+	ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]sqlc.BookingRequest, error)
 	GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error)
 	UpdateBookingRequestStatus(ctx context.Context, params sqlc.UpdateBookingRequestStatusParams) (sqlc.BookingRequest, error)
 	ReopenBookingRequest(ctx context.Context, params sqlc.ReopenBookingRequestParams) (sqlc.BookingRequest, error)
@@ -40,6 +43,9 @@ type Repository interface {
 	UpdateAppointmentStatus(ctx context.Context, params sqlc.UpdateAppointmentStatusParams) (sqlc.Appointment, error)
 	SetAppointmentCalendarEvent(ctx context.Context, params sqlc.SetAppointmentCalendarEventParams) error
 	CountOverlappingAppointments(ctx context.Context, params sqlc.CountOverlappingAppointmentsParams) (int64, error)
+
+	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.PaymentRequest, error)
+	ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.PaymentRequest, error)
 }
 
 type repository struct {
@@ -53,6 +59,14 @@ func NewRepository(db *pgxpool.Pool) Repository {
 
 func (r *repository) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error) {
 	return r.q.GetArtistByUserID(ctx, userID)
+}
+
+func (r *repository) GetArtistByID(ctx context.Context, id uuid.UUID) (sqlc.Artist, error) {
+	return r.q.GetArtistByID(ctx, id)
+}
+
+func (r *repository) GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error) {
+	return r.q.GetUserByID(ctx, id)
 }
 
 func (r *repository) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
@@ -85,6 +99,10 @@ func (r *repository) CreateBookingRequest(ctx context.Context, params sqlc.Creat
 
 func (r *repository) ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.BookingRequest, error) {
 	return r.q.ListBookingRequestsByArtist(ctx, artistID)
+}
+
+func (r *repository) ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]sqlc.BookingRequest, error) {
+	return r.q.ListBookingRequestsByClientEmail(ctx, clientEmail)
 }
 
 func (r *repository) GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error) {
@@ -149,4 +167,12 @@ func (r *repository) ClaimFlash(ctx context.Context, params sqlc.ClaimFlashParam
 
 func (r *repository) DeclineOtherFlashRequests(ctx context.Context, params sqlc.DeclineOtherFlashRequestsParams) error {
 	return r.q.DeclineOtherFlashRequests(ctx, params)
+}
+
+func (r *repository) ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.PaymentRequest, error) {
+	return r.q.ListPaymentRequestsByArtist(ctx, artistID)
+}
+
+func (r *repository) ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.PaymentRequest, error) {
+	return r.q.ListPaymentRequestsByBooking(ctx, bookingRequestID)
 }
