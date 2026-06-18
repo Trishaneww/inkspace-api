@@ -118,10 +118,15 @@ func (s *service) GetProfile(ctx context.Context, slug string) (Profile, error) 
 	if err != nil {
 		return Profile{}, err
 	}
+	publishedPortfolio, err := s.repo.CountPublishedPortfolio(ctx, b.artist.ID)
+	if err != nil {
+		return Profile{}, err
+	}
 
 	profile := s.buildProfile(ctx, b.user, b.settings, b.openBook, windows, locations)
 	profile.ArtistID = b.artist.ID.String()
 	profile.HasFlashes = availableFlashes > 0
+	profile.HasPortfolio = publishedPortfolio > 0
 	return profile, nil
 }
 

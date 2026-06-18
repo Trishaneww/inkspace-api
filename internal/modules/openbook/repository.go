@@ -16,6 +16,7 @@ type Repository interface {
 	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistAvailabilityWindow, error)
 	ListArtistLocations(ctx context.Context, artistID uuid.UUID) ([]sqlc.ArtistLocation, error)
 	CountAvailableFlashes(ctx context.Context, artistID uuid.UUID) (int64, error)
+	CountPublishedPortfolio(ctx context.Context, artistID uuid.UUID) (int64, error)
 	GetFlash(ctx context.Context, flashID uuid.UUID) (sqlc.Flash, error)
 	ListFlashPricingTiers(ctx context.Context, flashID uuid.UUID) ([]sqlc.FlashPricingTier, error)
 	CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error)
@@ -59,6 +60,14 @@ func (r *repository) CountAvailableFlashes(ctx context.Context, artistID uuid.UU
 		return 0, err
 	}
 	return row.Available, nil
+}
+
+func (r *repository) CountPublishedPortfolio(ctx context.Context, artistID uuid.UUID) (int64, error) {
+	row, err := r.q.CountPortfolioItemsByArtist(ctx, sqlc.CountPortfolioItemsByArtistParams{ArtistID: artistID})
+	if err != nil {
+		return 0, err
+	}
+	return row.Published, nil
 }
 
 func (r *repository) GetFlash(ctx context.Context, flashID uuid.UUID) (sqlc.Flash, error) {
