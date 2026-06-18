@@ -155,6 +155,16 @@ type InquiryListResponse struct {
 	Stats     BookingStats `json:"stats"`
 }
 
+type ClientInquiry struct {
+	Inquiry
+	ArtistName string `json:"artistName"`
+	ArtistSlug string `json:"artistSlug"`
+}
+
+type ClientInquiryListResponse struct {
+	Inquiries []ClientInquiry `json:"inquiries"`
+}
+
 // ── Request payloads ─────────────────────────────────────────────────────────
 
 type AcceptInput struct {

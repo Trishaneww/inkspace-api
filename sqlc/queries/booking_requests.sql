@@ -23,6 +23,12 @@ SELECT *
 FROM booking_requests
 WHERE id = $1 AND artist_id = $2;
 
+-- name: ListBookingRequestsByClientEmail :many
+SELECT *
+FROM booking_requests
+WHERE client_email = $1
+ORDER BY created_at DESC;
+
 -- name: DeclineOtherFlashRequests :exec
 UPDATE booking_requests
 SET status     = 'declined',

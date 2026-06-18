@@ -97,6 +97,7 @@ type Querier interface {
 	ListAvailabilityWindows(ctx context.Context, artistID uuid.UUID) ([]ArtistAvailabilityWindow, error)
 	ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]ArtistBlocklist, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error)
+	ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]BookingRequest, error)
 	ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]ArtistDaysOff, error)
 	ListFlashPricingTiers(ctx context.Context, flashID uuid.UUID) ([]FlashPricingTier, error)
 	// Batched fetch for a page of flashes, avoiding an N+1 of ListFlashPricingTiers.

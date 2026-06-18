@@ -11,6 +11,8 @@ import (
 
 type Repository interface {
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (sqlc.Artist, error)
+	GetArtistByID(ctx context.Context, id uuid.UUID) (sqlc.Artist, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error)
 	EnsureArtist(ctx context.Context, userID uuid.UUID) error
 
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
@@ -23,6 +25,7 @@ type Repository interface {
 
 	CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.BookingRequest, error)
+	ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]sqlc.BookingRequest, error)
 	GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error)
 	UpdateBookingRequestStatus(ctx context.Context, params sqlc.UpdateBookingRequestStatusParams) (sqlc.BookingRequest, error)
 	ReopenBookingRequest(ctx context.Context, params sqlc.ReopenBookingRequestParams) (sqlc.BookingRequest, error)
@@ -58,6 +61,14 @@ func (r *repository) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (s
 	return r.q.GetArtistByUserID(ctx, userID)
 }
 
+func (r *repository) GetArtistByID(ctx context.Context, id uuid.UUID) (sqlc.Artist, error) {
+	return r.q.GetArtistByID(ctx, id)
+}
+
+func (r *repository) GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error) {
+	return r.q.GetUserByID(ctx, id)
+}
+
 func (r *repository) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
 	return r.q.EnsureArtist(ctx, userID)
 }
@@ -88,6 +99,10 @@ func (r *repository) CreateBookingRequest(ctx context.Context, params sqlc.Creat
 
 func (r *repository) ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.BookingRequest, error) {
 	return r.q.ListBookingRequestsByArtist(ctx, artistID)
+}
+
+func (r *repository) ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]sqlc.BookingRequest, error) {
+	return r.q.ListBookingRequestsByClientEmail(ctx, clientEmail)
 }
 
 func (r *repository) GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error) {

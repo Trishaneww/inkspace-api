@@ -20,6 +20,7 @@ import (
 
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
+	"github.com/trishaneupnexx/inkspace-api/internal/tokens"
 )
 
 var (
@@ -47,7 +48,7 @@ type Service interface {
 
 	GetPublicPaymentRequest(ctx context.Context, token string) (PublicPaymentRequest, error)
 	CreateCheckout(ctx context.Context, token string) (CheckoutResponse, error)
-	CreateClientAccount(ctx context.Context, token string, input CreateClientAccountInput) error
+	CreateClientAccount(ctx context.Context, token string, input CreateClientAccountInput) (ClientSession, error)
 
 	ProcessWebhook(ctx context.Context, payload []byte, signature string) error
 }
@@ -282,28 +283,28 @@ func (s *service) GetPublicPaymentRequest(ctx context.Context, token string) (Pu
 	}, nil
 }
 
-func (s *service) CreateClientAccount(ctx context.Context, token string, input CreateClientAccountInput) error {
+func (s *service) CreateClientAccount(ctx context.Context, token string, input CreateClientAccountInput) (ClientSession, error) {
 	if len(input.Password) < minPasswordLength {
-		return ErrWeakPassword
+		return ClientSession{}, ErrWeakPassword
 	}
 	row, err := s.repo.GetPaymentRequestByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
+			return ClientSession{}, ErrNotFound
 		}
-		return err
+		return ClientSession{}, err
 	}
 	email := normalizeEmail(row.ClientEmail)
 
 	if _, err := s.repo.GetUserByEmail(ctx, email); err == nil {
-		return ErrAccountExists
+		return ClientSession{}, ErrAccountExists
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return err
+		return ClientSession{}, err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return ClientSession{}, err
 	}
 
 	first, last := splitName(row.ClientName)
@@ -322,7 +323,7 @@ func (s *service) CreateClientAccount(ctx context.Context, token string, input C
 		LastName:     last,
 	})
 	if err != nil {
-		return err
+		return ClientSession{}, err
 	}
 
 	if input.MarketingOptIn {
@@ -336,7 +337,16 @@ func (s *service) CreateClientAccount(ctx context.Context, token string, input C
 		ClientEmail:  email,
 		ClientUserID: pgtype.UUID{Bytes: user.ID, Valid: true},
 	})
-	return nil
+
+	pair, err := tokens.IssuePair(ctx, s.repo, s.cfg, user)
+	if err != nil {
+		return ClientSession{}, err
+	}
+	return ClientSession{
+		Token:        pair.AccessToken,
+		RefreshToken: pair.RefreshToken,
+		User:         sessionUserFromRecord(user),
+	}, nil
 }
 
 func normalizeEmail(email string) string {

@@ -30,6 +30,7 @@ var (
 
 type Service interface {
 	ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryListResponse, error)
+	ListClientInquiries(ctx context.Context, userID uuid.UUID) (ClientInquiryListResponse, error)
 	ListCalendarEvents(ctx context.Context, userID uuid.UUID, rangeStart, rangeEnd time.Time) ([]CalendarEvent, error)
 	CreateManualAppointment(ctx context.Context, userID uuid.UUID, input CreateAppointmentInput) (Inquiry, error)
 	GetInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
@@ -75,6 +76,86 @@ func (s *service) ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryL
 	s.attachAppointments(ctx, artist.ID, inquiries)
 	s.attachPaymentRequests(ctx, artist.ID, inquiries)
 	return InquiryListResponse{Inquiries: inquiries, Stats: statsFromRow(statsRow)}, nil
+}
+
+func (s *service) ListClientInquiries(ctx context.Context, userID uuid.UUID) (ClientInquiryListResponse, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return ClientInquiryListResponse{}, err
+	}
+	rows, err := s.repo.ListBookingRequestsByClientEmail(ctx, user.Email)
+	if err != nil {
+		return ClientInquiryListResponse{}, err
+	}
+
+	artists := make(map[uuid.UUID]artistRef)
+	inquiries := make([]ClientInquiry, 0, len(rows))
+	for _, row := range rows {
+		inquiry := inquiryFromRow(row)
+		s.attachClientPayments(ctx, row.ID, &inquiry)
+		if appt, err := s.repo.GetLatestAppointmentByRequest(ctx, row.ID); err == nil {
+			inquiry.Appointment = appointmentFromRow(appt)
+		}
+		ref := s.resolveArtistRef(ctx, row.ArtistID, artists)
+		inquiries = append(inquiries, ClientInquiry{
+			Inquiry:    inquiry,
+			ArtistName: ref.name,
+			ArtistSlug: ref.slug,
+		})
+	}
+	return ClientInquiryListResponse{Inquiries: inquiries}, nil
+}
+
+func (s *service) attachClientPayments(ctx context.Context, bookingID uuid.UUID, inquiry *Inquiry) {
+	payments, err := s.repo.ListPaymentRequestsByBooking(ctx, bookingID)
+	if err != nil || len(payments) == 0 {
+		return
+	}
+	list := make([]InquiryPayment, 0, len(payments))
+	for _, p := range payments {
+		list = append(list, paymentFromRow(p))
+	}
+	inquiry.Payments = list
+}
+
+type artistRef struct {
+	name string
+	slug string
+}
+
+func (s *service) resolveArtistRef(ctx context.Context, artistID uuid.UUID, cache map[uuid.UUID]artistRef) artistRef {
+	if ref, ok := cache[artistID]; ok {
+		return ref
+	}
+	ref := artistRef{name: s.artistDisplayName(ctx, artistID)}
+	if book, err := s.repo.GetOpenBookByArtist(ctx, artistID); err == nil {
+		ref.slug = book.Slug
+	}
+	cache[artistID] = ref
+	return ref
+}
+
+func (s *service) artistDisplayName(ctx context.Context, artistID uuid.UUID) string {
+	artist, err := s.repo.GetArtistByID(ctx, artistID)
+	if err != nil {
+		return ""
+	}
+	user, err := s.repo.GetUserByID(ctx, artist.UserID)
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(strings.Join([]string{stringOrEmpty(user.FirstName), stringOrEmpty(user.LastName)}, " "))
+	if name != "" {
+		return name
+	}
+	return stringOrEmpty(user.Username)
+}
+
+func stringOrEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func (s *service) ListCalendarEvents(ctx context.Context, userID uuid.UUID, rangeStart, rangeEnd time.Time) ([]CalendarEvent, error) {
