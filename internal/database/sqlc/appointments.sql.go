@@ -53,7 +53,7 @@ INSERT INTO appointments (
     $1, $2, $3, $4,
     $5, $6, $7, $8
 )
-RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
 `
 
 type CreateAppointmentParams struct {
@@ -92,12 +92,13 @@ func (q *Queries) CreateAppointment(ctx context.Context, arg CreateAppointmentPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
 
 const getLatestAppointmentByRequest = `-- name: GetLatestAppointmentByRequest :one
-SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id
+SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
 FROM appointments
 WHERE booking_request_id = $1
 ORDER BY (status IN ('scheduled', 'proposed')) DESC, created_at DESC
@@ -122,6 +123,7 @@ func (q *Queries) GetLatestAppointmentByRequest(ctx context.Context, bookingRequ
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -206,7 +208,7 @@ func (q *Queries) ListAppointmentsByArtistInRange(ctx context.Context, arg ListA
 }
 
 const listLatestAppointmentsByArtist = `-- name: ListLatestAppointmentsByArtist :many
-SELECT DISTINCT ON (booking_request_id) id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id
+SELECT DISTINCT ON (booking_request_id) id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
 FROM appointments
 WHERE artist_id = $1
 ORDER BY booking_request_id, (status IN ('scheduled', 'proposed')) DESC, created_at DESC
@@ -236,6 +238,7 @@ func (q *Queries) ListLatestAppointmentsByArtist(ctx context.Context, artistID u
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.GoogleCalendarEventID,
+			&i.ReminderSentAt,
 		); err != nil {
 			return nil, err
 		}
@@ -248,7 +251,7 @@ func (q *Queries) ListLatestAppointmentsByArtist(ctx context.Context, artistID u
 }
 
 const listLiveAppointmentsByRequest = `-- name: ListLiveAppointmentsByRequest :many
-SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id
+SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
 FROM appointments
 WHERE booking_request_id = $1 AND status IN ('scheduled', 'proposed')
 ORDER BY created_at
@@ -276,6 +279,7 @@ func (q *Queries) ListLiveAppointmentsByRequest(ctx context.Context, bookingRequ
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.GoogleCalendarEventID,
+			&i.ReminderSentAt,
 		); err != nil {
 			return nil, err
 		}
@@ -312,7 +316,7 @@ SET scheduled_start  = $1::timestamptz,
     status           = 'scheduled',
     updated_at       = now()
 WHERE id = $4 AND artist_id = $5
-RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
 `
 
 type UpdateAppointmentScheduleParams struct {
@@ -345,6 +349,7 @@ func (q *Queries) UpdateAppointmentSchedule(ctx context.Context, arg UpdateAppoi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -354,7 +359,7 @@ UPDATE appointments
 SET status     = $1,
     updated_at = now()
 WHERE id = $2 AND artist_id = $3
-RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
 `
 
 type UpdateAppointmentStatusParams struct {
@@ -379,6 +384,7 @@ func (q *Queries) UpdateAppointmentStatus(ctx context.Context, arg UpdateAppoint
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }

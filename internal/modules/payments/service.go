@@ -20,6 +20,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
+	"github.com/trishaneupnexx/inkspace-api/internal/email"
 )
 
 var (
@@ -54,13 +55,20 @@ type Service interface {
 }
 
 type service struct {
-	cfg  *config.Config
-	repo Repository
-	log  *slog.Logger
+	cfg   *config.Config
+	repo  Repository
+	log   *slog.Logger
+	email *email.Client
 }
 
 func NewService(cfg *config.Config, repo Repository) Service {
-	return &service{cfg: cfg, repo: repo, log: slog.Default()}
+	log := slog.Default()
+	return &service{
+		cfg:   cfg,
+		repo:  repo,
+		log:   log,
+		email: email.NewClient(cfg.FrontendURL, cfg.InternalEmailSecret, log),
+	}
 }
 
 func (s *service) CreatePaymentRequest(ctx context.Context, userID, bookingID uuid.UUID, input CreatePaymentRequestInput) (PaymentRequest, error) {

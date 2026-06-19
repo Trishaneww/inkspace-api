@@ -24,6 +24,7 @@ type Appointment struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	GoogleCalendarEventID *string            `json:"google_calendar_event_id"`
+	ReminderSentAt        pgtype.Timestamptz `json:"reminder_sent_at"`
 }
 
 type Artist struct {
@@ -221,6 +222,7 @@ type PaymentRequest struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	LastEmailedAt           pgtype.Timestamptz `json:"last_emailed_at"`
+	ReminderSentAt          pgtype.Timestamptz `json:"reminder_sent_at"`
 }
 
 type PhoneVerification struct {

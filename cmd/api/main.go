@@ -12,14 +12,20 @@ import (
 
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database"
+	"github.com/trishaneupnexx/inkspace-api/internal/email"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
 	"github.com/trishaneupnexx/inkspace-api/internal/maintenance"
+	"github.com/trishaneupnexx/inkspace-api/internal/messaging"
 	"github.com/trishaneupnexx/inkspace-api/internal/redisclient"
+	"github.com/trishaneupnexx/inkspace-api/internal/reminders"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 	"github.com/trishaneupnexx/inkspace-api/internal/server"
 )
 
-const cleanupInterval = time.Hour
+const (
+	cleanupInterval  = time.Hour
+	reminderInterval = time.Hour
+)
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -68,6 +74,10 @@ func main() {
 
 	srv := server.New(cfg, log, db, pub, s3, rdb)
 	go maintenance.NewCleaner(db, log, cleanupInterval).Run(ctx)
+
+	smsSender := messaging.NewSender(cfg, log)
+	emailClient := email.NewClient(cfg.FrontendURL, cfg.InternalEmailSecret, log)
+	go reminders.New(db, smsSender, emailClient, cfg.FrontendURL, log, reminderInterval).Run(ctx)
 
 	go func() {
 		if err := srv.Start(); err != nil {

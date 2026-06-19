@@ -1,10 +1,6 @@
 package payments
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"net/http"
 	"time"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
@@ -61,35 +57,5 @@ func (s *service) sendPaymentReceiptEmail(row sqlc.PaymentRequest, artistName st
 }
 
 func (s *service) postInternalEmail(path string, payload any) {
-	if s.cfg.InternalEmailSecret == "" {
-		return
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		s.log.Warn("internal_email_marshal_failed", "path", path, "error", err)
-		return
-	}
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.FrontendURL+path, bytes.NewReader(body))
-		if err != nil {
-			s.log.Warn("internal_email_request_failed", "path", path, "error", err)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-internal-secret", s.cfg.InternalEmailSecret)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			s.log.Warn("internal_email_send_failed", "path", path, "error", err)
-			return
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode >= http.StatusMultipleChoices {
-			s.log.Warn("internal_email_rejected", "path", path, "status", resp.StatusCode)
-		}
-	}()
+	s.email.Post(path, payload)
 }

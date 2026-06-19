@@ -19,7 +19,7 @@ SET stripe_checkout_session_id = $1,
     status                     = 'processing',
     updated_at                 = now()
 WHERE id = $3
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 type AttachCheckoutSessionParams struct {
@@ -55,6 +55,7 @@ func (q *Queries) AttachCheckoutSession(ctx context.Context, arg AttachCheckoutS
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -66,7 +67,7 @@ SET status      = 'canceled',
     updated_at  = now()
 WHERE id = $1 AND artist_id = $2
   AND status IN ('requested', 'processing')
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 type CancelPaymentRequestParams struct {
@@ -101,6 +102,7 @@ func (q *Queries) CancelPaymentRequest(ctx context.Context, arg CancelPaymentReq
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -134,7 +136,7 @@ INSERT INTO payment_requests (
     $5, $6, $7, $8,
     $9, $10, $11, $12, $13
 )
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 type CreatePaymentRequestParams struct {
@@ -194,6 +196,7 @@ func (q *Queries) CreatePaymentRequest(ctx context.Context, arg CreatePaymentReq
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -237,7 +240,7 @@ func (q *Queries) GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (Ge
 }
 
 const getPaymentRequestByPaymentIntent = `-- name: GetPaymentRequestByPaymentIntent :one
-SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at FROM payment_requests WHERE stripe_payment_intent_id = $1
+SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at FROM payment_requests WHERE stripe_payment_intent_id = $1
 `
 
 func (q *Queries) GetPaymentRequestByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error) {
@@ -267,12 +270,13 @@ func (q *Queries) GetPaymentRequestByPaymentIntent(ctx context.Context, stripePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
 
 const getPaymentRequestByToken = `-- name: GetPaymentRequestByToken :one
-SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at FROM payment_requests WHERE public_token = $1
+SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at FROM payment_requests WHERE public_token = $1
 `
 
 func (q *Queries) GetPaymentRequestByToken(ctx context.Context, publicToken string) (PaymentRequest, error) {
@@ -302,12 +306,13 @@ func (q *Queries) GetPaymentRequestByToken(ctx context.Context, publicToken stri
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
 
 const getPaymentRequestForArtist = `-- name: GetPaymentRequestForArtist :one
-SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at FROM payment_requests WHERE id = $1 AND artist_id = $2
+SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at FROM payment_requests WHERE id = $1 AND artist_id = $2
 `
 
 type GetPaymentRequestForArtistParams struct {
@@ -342,12 +347,13 @@ func (q *Queries) GetPaymentRequestForArtist(ctx context.Context, arg GetPayment
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
 
 const listPaymentRequestsByArtist = `-- name: ListPaymentRequestsByArtist :many
-SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at FROM payment_requests
+SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at FROM payment_requests
 WHERE artist_id = $1
 ORDER BY created_at DESC
 `
@@ -385,6 +391,7 @@ func (q *Queries) ListPaymentRequestsByArtist(ctx context.Context, artistID uuid
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastEmailedAt,
+			&i.ReminderSentAt,
 		); err != nil {
 			return nil, err
 		}
@@ -397,7 +404,7 @@ func (q *Queries) ListPaymentRequestsByArtist(ctx context.Context, artistID uuid
 }
 
 const listPaymentRequestsByBooking = `-- name: ListPaymentRequestsByBooking :many
-SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at FROM payment_requests
+SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at FROM payment_requests
 WHERE booking_request_id = $1
 ORDER BY created_at DESC
 `
@@ -435,6 +442,7 @@ func (q *Queries) ListPaymentRequestsByBooking(ctx context.Context, bookingReque
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastEmailedAt,
+			&i.ReminderSentAt,
 		); err != nil {
 			return nil, err
 		}
@@ -515,7 +523,7 @@ UPDATE payment_requests
 SET last_emailed_at = now(),
     updated_at      = now()
 WHERE id = $1 AND artist_id = $2
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 type MarkPaymentRequestEmailedParams struct {
@@ -550,6 +558,7 @@ func (q *Queries) MarkPaymentRequestEmailed(ctx context.Context, arg MarkPayment
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -560,7 +569,7 @@ SET status     = 'expired',
     updated_at = now()
 WHERE stripe_checkout_session_id = $1
   AND status IN ('requested', 'processing')
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 func (q *Queries) MarkPaymentRequestExpiredBySession(ctx context.Context, stripeCheckoutSessionID *string) (PaymentRequest, error) {
@@ -590,6 +599,7 @@ func (q *Queries) MarkPaymentRequestExpiredBySession(ctx context.Context, stripe
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -600,7 +610,7 @@ SET status     = 'failed',
     updated_at = now()
 WHERE stripe_payment_intent_id = $1
   AND status NOT IN ('paid', 'refunded')
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 func (q *Queries) MarkPaymentRequestFailedByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error) {
@@ -630,6 +640,7 @@ func (q *Queries) MarkPaymentRequestFailedByPaymentIntent(ctx context.Context, s
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -641,7 +652,7 @@ SET status     = 'paid',
     updated_at = now()
 WHERE stripe_payment_intent_id = $1
   AND status NOT IN ('paid', 'refunded')
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 func (q *Queries) MarkPaymentRequestPaidByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error) {
@@ -671,6 +682,7 @@ func (q *Queries) MarkPaymentRequestPaidByPaymentIntent(ctx context.Context, str
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -683,7 +695,7 @@ SET status                   = 'paid',
     updated_at               = now()
 WHERE stripe_checkout_session_id = $2
   AND status NOT IN ('paid', 'refunded')
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 type MarkPaymentRequestPaidBySessionParams struct {
@@ -718,6 +730,7 @@ func (q *Queries) MarkPaymentRequestPaidBySession(ctx context.Context, arg MarkP
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }
@@ -728,7 +741,7 @@ SET status                = 'refunded',
     amount_refunded_cents = $1,
     updated_at            = now()
 WHERE stripe_payment_intent_id = $2
-RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at
+RETURNING id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at, reminder_sent_at
 `
 
 type RefundPaymentRequestByPaymentIntentParams struct {
@@ -763,6 +776,7 @@ func (q *Queries) RefundPaymentRequestByPaymentIntent(ctx context.Context, arg R
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastEmailedAt,
+		&i.ReminderSentAt,
 	)
 	return i, err
 }

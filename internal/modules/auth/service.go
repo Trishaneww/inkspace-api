@@ -11,7 +11,6 @@ import (
 	"log"
 	"log/slog"
 	"math/big"
-	"os"
 	"strings"
 	"time"
 
@@ -24,6 +23,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
+	"github.com/trishaneupnexx/inkspace-api/internal/messaging"
 	"github.com/trishaneupnexx/inkspace-api/internal/ratelimit"
 )
 
@@ -62,6 +62,7 @@ type service struct {
 
 	loginLockout *ratelimit.Lockout
 	otpLimiter   ratelimit.Limiter
+	sms          messaging.Sender
 	log          *slog.Logger
 }
 
@@ -72,13 +73,22 @@ func NewService(
 	loginLockout *ratelimit.Lockout,
 	otpLimiter ratelimit.Limiter,
 ) Service {
+	log := slog.Default()
 	return &service{
 		cfg:          cfg,
 		repo:         repo,
 		events:       pub,
 		loginLockout: loginLockout,
 		otpLimiter:   otpLimiter,
-		log:          slog.Default(),
+		sms:          messaging.NewSender(cfg, log),
+		log:          log,
+	}
+}
+
+func (s *service) sendOTP(ctx context.Context, phone, code string) {
+	body := fmt.Sprintf("Your Inkspace verification code is %s", code)
+	if err := s.sms.Send(ctx, phone, body); err != nil {
+		s.log.Warn("otp_send_failed", "error", err)
 	}
 }
 
@@ -128,13 +138,13 @@ func (s *service) Register(
 				LastName:     &lastName,
 				Phone:        phone,
 				Username:     username,
-			InstagramURL: instagram,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return s.issuePhoneVerification(ctx, updated)
+				InstagramURL: instagram,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return s.issuePhoneVerification(ctx, updated)
 	}
 
 	user, err := s.repo.CreateUser(ctx, sqlc.CreateUserParams{
@@ -267,20 +277,7 @@ func (s *service) issuePhoneVerification(
 		return nil, err
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"\n"+
-			"✅ ═════════════════════════════════════════════════════ ✅\n"+
-			"   ✅✅✅  PHONE VERIFICATION CODE: %s  ✅✅✅\n"+
-			"✅ ═════════════════════════════════════════════════════ ✅\n"+
-			"      user:  %s\n"+
-			"      phone: %s\n"+
-			"      ttl:   %s (expires %s)\n",
-		code,
-		user.ID,
-		user.Phone,
-		s.cfg.PhoneCodeTTL,
-		expires.Time.Format(time.RFC3339),
-	)
+	s.sendOTP(ctx, user.Phone, code)
 
 	return &PhoneVerificationRequiredResponse{
 		Status:         "phone_verification_required",
@@ -395,20 +392,7 @@ func (s *service) ResendPhoneCode(
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"\n"+
-			"♻️ ═════════════════════════════════════════════════════ ♻️\n"+
-			"   ♻️♻️♻️  RESENT PHONE VERIFICATION CODE: %s  ♻️♻️♻️\n"+
-			"♻️ ═════════════════════════════════════════════════════ ♻️\n"+
-			"      verification: %s\n"+
-			"      phone:        %s\n"+
-			"      ttl:          %s (expires %s)\n",
-		code,
-		verification.ID,
-		verification.Phone,
-		s.cfg.PhoneCodeTTL,
-		expires.Time.Format(time.RFC3339),
-	)
+	s.sendOTP(ctx, verification.Phone, code)
 	return nil
 }
 
@@ -520,14 +504,14 @@ func (s *service) CompleteOAuthSignup(
 				FirstName:    &firstName,
 				LastName:     &lastName,
 				Phone:        phone,
-			Username:     username,
-			InstagramURL: instagram,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return s.issuePhoneVerification(ctx, updated)
+				Username:     username,
+				InstagramURL: instagram,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return s.issuePhoneVerification(ctx, updated)
 	}
 
 	user, err := s.repo.CreateUser(ctx, sqlc.CreateUserParams{
