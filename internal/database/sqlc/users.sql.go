@@ -61,7 +61,7 @@ type CreateUserParams struct {
 	Role         string  `json:"role"`
 	FirstName    *string `json:"first_name"`
 	LastName     *string `json:"last_name"`
-	Phone        *string `json:"phone"`
+	Phone        string  `json:"phone"`
 	Username     *string `json:"username"`
 	InstagramURL *string `json:"instagram_url"`
 }
@@ -204,7 +204,7 @@ const getUserByPhone = `-- name: GetUserByPhone :one
 SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source FROM users WHERE phone = $1
 `
 
-func (q *Queries) GetUserByPhone(ctx context.Context, phone *string) (User, error) {
+func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByPhone, phone)
 	var i User
 	err := row.Scan(
@@ -312,7 +312,7 @@ type UpdateUnverifiedUserParams struct {
 	Role         string    `json:"role"`
 	FirstName    *string   `json:"first_name"`
 	LastName     *string   `json:"last_name"`
-	Phone        *string   `json:"phone"`
+	Phone        string    `json:"phone"`
 	Username     *string   `json:"username"`
 	InstagramURL *string   `json:"instagram_url"`
 }

@@ -39,9 +39,7 @@ func userFromRecord(u sqlc.User) User {
 	if u.LastName != nil {
 		out.LastName = *u.LastName
 	}
-	if u.Phone != nil {
-		out.Phone = *u.Phone
-	}
+	out.Phone = u.Phone
 	if u.CreatedAt.Valid {
 		out.CreatedAt = u.CreatedAt.Time.UTC().Format(time.RFC3339)
 	}

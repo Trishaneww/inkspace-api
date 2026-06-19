@@ -468,6 +468,13 @@ func (s *service) UpdateOpenBook(ctx context.Context, userID uuid.UUID, input Up
 		params.Slug = &slug
 	}
 
+	if input.Theme != nil {
+		if !OpenBookThemes[*input.Theme] {
+			return OpenBookResponse{}, fmt.Errorf("%w: unknown theme", ErrInvalidInput)
+		}
+		params.Theme = input.Theme
+	}
+
 	if input.CustomQuestions != nil {
 		questions := make([]string, 0, len(*input.CustomQuestions))
 		for _, q := range *input.CustomQuestions {
@@ -503,6 +510,7 @@ func openBookResponse(book sqlc.OpenBook) OpenBookResponse {
 		Slug:            book.Slug,
 		SchedulingMode:  book.SchedulingMode,
 		CustomQuestions: parseQuestions(book.CustomQuestions),
+		Theme:           book.Theme,
 	}
 }
 

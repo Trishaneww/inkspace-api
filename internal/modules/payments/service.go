@@ -16,11 +16,10 @@ import (
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/refund"
 	"github.com/stripe/stripe-go/v82/webhook"
-	"golang.org/x/crypto/bcrypt"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
-	"github.com/trishaneupnexx/inkspace-api/internal/tokens"
 )
 
 var (
@@ -34,11 +33,11 @@ var (
 	ErrStripeAPI          = errors.New("stripe api error")
 	ErrAccountExists      = errors.New("an account with this email already exists")
 	ErrWeakPassword       = errors.New("password is too short")
+	ErrPhoneRequired      = errors.New("a phone number is required")
+	ErrPhoneTaken         = errors.New("that phone number is already in use")
 	ErrNotRefundable      = errors.New("payment request is not refundable")
 	ErrResendTooSoon      = errors.New("payment link was emailed too recently")
 )
-
-const minPasswordLength = 8
 
 type Service interface {
 	CreatePaymentRequest(ctx context.Context, userID, bookingID uuid.UUID, input CreatePaymentRequestInput) (PaymentRequest, error)
@@ -284,9 +283,6 @@ func (s *service) GetPublicPaymentRequest(ctx context.Context, token string) (Pu
 }
 
 func (s *service) CreateClientAccount(ctx context.Context, token string, input CreateClientAccountInput) (ClientSession, error) {
-	if len(input.Password) < minPasswordLength {
-		return ClientSession{}, ErrWeakPassword
-	}
 	row, err := s.repo.GetPaymentRequestByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -294,77 +290,31 @@ func (s *service) CreateClientAccount(ctx context.Context, token string, input C
 		}
 		return ClientSession{}, err
 	}
-	email := normalizeEmail(row.ClientEmail)
 
-	if _, err := s.repo.GetUserByEmail(ctx, email); err == nil {
+	session, err := clientaccount.Create(ctx, s.repo, s.cfg, row.ClientEmail, clientaccount.Input{
+		FirstName:      input.FirstName,
+		LastName:       input.LastName,
+		Phone:          input.Phone,
+		Password:       input.Password,
+		MarketingOptIn: input.MarketingOptIn,
+	}, "pay_page")
+	switch {
+	case errors.Is(err, clientaccount.ErrWeakPassword):
+		return ClientSession{}, ErrWeakPassword
+	case errors.Is(err, clientaccount.ErrAccountExists):
 		return ClientSession{}, ErrAccountExists
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+	case errors.Is(err, clientaccount.ErrPhoneRequired):
+		return ClientSession{}, ErrPhoneRequired
+	case errors.Is(err, clientaccount.ErrPhoneTaken):
+		return ClientSession{}, ErrPhoneTaken
+	case err != nil:
 		return ClientSession{}, err
 	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return ClientSession{}, err
-	}
-
-	first, last := splitName(row.ClientName)
-	if name := strings.TrimSpace(input.FirstName); name != "" {
-		first = &name
-		last = nil
-		if surname := strings.TrimSpace(input.LastName); surname != "" {
-			last = &surname
-		}
-	}
-	user, err := s.repo.CreateUser(ctx, sqlc.CreateUserParams{
-		Email:        email,
-		PasswordHash: string(hash),
-		Role:         "user",
-		FirstName:    first,
-		LastName:     last,
-	})
-	if err != nil {
-		return ClientSession{}, err
-	}
-
-	if input.MarketingOptIn {
-		source := "pay_page"
-		_ = s.repo.SetUserMarketingOptIn(ctx, sqlc.SetUserMarketingOptInParams{
-			ID:     user.ID,
-			Source: &source,
-		})
-	}
-	_ = s.repo.LinkBookingRequestsToClient(ctx, sqlc.LinkBookingRequestsToClientParams{
-		ClientEmail:  email,
-		ClientUserID: pgtype.UUID{Bytes: user.ID, Valid: true},
-	})
-
-	pair, err := tokens.IssuePair(ctx, s.repo, s.cfg, user)
-	if err != nil {
-		return ClientSession{}, err
-	}
-	return ClientSession{
-		Token:        pair.AccessToken,
-		RefreshToken: pair.RefreshToken,
-		User:         sessionUserFromRecord(user),
-	}, nil
+	return session, nil
 }
 
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
-}
-
-func splitName(full string) (*string, *string) {
-	full = strings.TrimSpace(full)
-	if full == "" {
-		return nil, nil
-	}
-	parts := strings.SplitN(full, " ", 2)
-	first := parts[0]
-	if len(parts) == 1 || strings.TrimSpace(parts[1]) == "" {
-		return &first, nil
-	}
-	last := strings.TrimSpace(parts[1])
-	return &first, &last
 }
 
 func (s *service) CreateCheckout(ctx context.Context, token string) (CheckoutResponse, error) {

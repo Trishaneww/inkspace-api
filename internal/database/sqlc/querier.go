@@ -65,7 +65,9 @@ type Querier interface {
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
+	GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (BookingRequest, error)
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
+	GetClientBookingRequest(ctx context.Context, arg GetClientBookingRequestParams) (BookingRequest, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	// The request's "current" appointment: a live (scheduled/proposed) one if any,
 	// otherwise the most recent overall (so cancelled ones still surface for history).
@@ -79,7 +81,7 @@ type Querier interface {
 	GetPrimaryLocation(ctx context.Context, artistID uuid.UUID) (ArtistLocation, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
-	GetUserByPhone(ctx context.Context, phone *string) (User, error)
+	GetUserByPhone(ctx context.Context, phone string) (User, error)
 	GetUserByUsername(ctx context.Context, username *string) (User, error)
 	IncrementFlashViewCount(ctx context.Context, id uuid.UUID) error
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
@@ -134,8 +136,10 @@ type Querier interface {
 	SetBookingDepositStatus(ctx context.Context, arg SetBookingDepositStatusParams) error
 	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
+	SetScheduleToken(ctx context.Context, arg SetScheduleTokenParams) (BookingRequest, error)
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
 	SetUserMarketingOptIn(ctx context.Context, arg SetUserMarketingOptInParams) error
+	TouchScheduleEmailedAt(ctx context.Context, arg TouchScheduleEmailedAtParams) (BookingRequest, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
 	UpdateAppointmentSchedule(ctx context.Context, arg UpdateAppointmentScheduleParams) (Appointment, error)

@@ -14,6 +14,7 @@ UPDATE open_books
 SET slug             = COALESCE(sqlc.narg('slug')::citext, slug),
     scheduling_mode  = COALESCE(sqlc.narg('scheduling_mode')::text, scheduling_mode),
     custom_questions = COALESCE(sqlc.narg('custom_questions')::jsonb, custom_questions),
+    theme            = COALESCE(sqlc.narg('theme')::text, theme),
     updated_at       = now()
 WHERE artist_id = @artist_id
 RETURNING *;

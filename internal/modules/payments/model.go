@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 )
 
@@ -58,40 +59,12 @@ type PublicPaymentRequest struct {
 type CreateClientAccountInput struct {
 	FirstName      string `json:"firstName"`
 	LastName       string `json:"lastName"`
+	Phone          string `json:"phone"`
 	Password       string `json:"password"`
 	MarketingOptIn bool   `json:"marketingOptIn"`
 }
 
-type ClientSession struct {
-	Token        string      `json:"token"`
-	RefreshToken string      `json:"refreshToken"`
-	User         SessionUser `json:"user"`
-}
-
-type SessionUser struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Role      string `json:"role"`
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	CreatedAt string `json:"createdAt"`
-}
-
-func sessionUserFromRecord(u sqlc.User) SessionUser {
-	out := SessionUser{
-		ID:        u.ID.String(),
-		Email:     u.Email,
-		Role:      u.Role,
-		CreatedAt: formatTimestamp(u.CreatedAt),
-	}
-	if u.FirstName != nil {
-		out.FirstName = *u.FirstName
-	}
-	if u.LastName != nil {
-		out.LastName = *u.LastName
-	}
-	return out
-}
+type ClientSession = clientaccount.Session
 
 type CheckoutResponse struct {
 	URL string `json:"url"`
