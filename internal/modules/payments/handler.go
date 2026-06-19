@@ -170,6 +170,10 @@ func respondError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusConflict, "account_exists", "an account with this email already exists")
 	case errors.Is(err, ErrWeakPassword):
 		httpx.Error(c, http.StatusBadRequest, "weak_password", "password must be at least 8 characters")
+	case errors.Is(err, ErrPhoneRequired):
+		httpx.Error(c, http.StatusBadRequest, "phone_required", err.Error())
+	case errors.Is(err, ErrPhoneTaken):
+		httpx.Error(c, http.StatusConflict, "phone_taken", err.Error())
 	case errors.Is(err, ErrAmountTooLow):
 		httpx.Error(c, http.StatusBadRequest, "amount_too_low", err.Error())
 	case errors.Is(err, ErrNoDepositDefault):

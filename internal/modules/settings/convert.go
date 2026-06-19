@@ -24,9 +24,7 @@ func accountFromUser(u sqlc.User) Account {
 	if u.Username != nil {
 		out.Username = *u.Username
 	}
-	if u.Phone != nil {
-		out.Phone = *u.Phone
-	}
+	out.Phone = u.Phone
 	if u.AvatarURL != nil {
 		out.AvatarURL = *u.AvatarURL
 	}

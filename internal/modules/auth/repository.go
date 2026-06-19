@@ -14,7 +14,7 @@ type Repository interface {
 	UpdateUnverifiedUser(ctx context.Context, arg sqlc.UpdateUnverifiedUserParams) (sqlc.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error)
 	GetUserByEmail(ctx context.Context, email string) (sqlc.User, error)
-	GetUserByPhone(ctx context.Context, phone *string) (sqlc.User, error)
+	GetUserByPhone(ctx context.Context, phone string) (sqlc.User, error)
 	GetUserByUsername(ctx context.Context, username *string) (sqlc.User, error)
 	MarkPhoneVerified(ctx context.Context, id uuid.UUID) error
 
@@ -83,7 +83,7 @@ func (r *repository) GetUserByEmail(
 }
 
 func (r *repository) GetUserByPhone(
-	ctx context.Context, phone *string,
+	ctx context.Context, phone string,
 ) (sqlc.User, error) {
 	return r.q.GetUserByPhone(ctx, phone)
 }

@@ -107,7 +107,7 @@ func (s *service) Register(
 		return nil, ErrEmailTaken
 	}
 
-	phoneOwner, err := s.repo.GetUserByPhone(ctx, &phone)
+	phoneOwner, err := s.repo.GetUserByPhone(ctx, phone)
 	switch {
 	case err == nil:
 		if !emailExists || phoneOwner.ID != existing.ID {
@@ -126,7 +126,7 @@ func (s *service) Register(
 				Role:         string(in.Role),
 				FirstName:    &firstName,
 				LastName:     &lastName,
-				Phone:        &phone,
+				Phone:        phone,
 				Username:     username,
 			InstagramURL: instagram,
 		},
@@ -143,7 +143,7 @@ func (s *service) Register(
 		Role:         string(in.Role),
 		FirstName:    &firstName,
 		LastName:     &lastName,
-		Phone:        &phone,
+		Phone:        phone,
 		Username:     username,
 		InstagramURL: instagram,
 	})
@@ -229,11 +229,11 @@ func (s *service) otpSendAllowed(ctx context.Context, phone string) bool {
 func (s *service) issuePhoneVerification(
 	ctx context.Context, user sqlc.User,
 ) (*PhoneVerificationRequiredResponse, error) {
-	if user.Phone == nil || *user.Phone == "" {
+	if user.Phone == "" {
 		return nil, errors.New("user has no phone on file")
 	}
 
-	if !s.otpSendAllowed(ctx, *user.Phone) {
+	if !s.otpSendAllowed(ctx, user.Phone) {
 		return nil, ErrTooManyOTPRequests
 	}
 
@@ -258,7 +258,7 @@ func (s *service) issuePhoneVerification(
 	verification, err := s.repo.CreatePhoneVerification(
 		ctx, sqlc.CreatePhoneVerificationParams{
 			UserID:    user.ID,
-			Phone:     *user.Phone,
+			Phone:     user.Phone,
 			CodeHash:  string(codeHash),
 			ExpiresAt: expires,
 		},
@@ -277,7 +277,7 @@ func (s *service) issuePhoneVerification(
 			"      ttl:   %s (expires %s)\n",
 		code,
 		user.ID,
-		*user.Phone,
+		user.Phone,
 		s.cfg.PhoneCodeTTL,
 		expires.Time.Format(time.RFC3339),
 	)
@@ -285,7 +285,7 @@ func (s *service) issuePhoneVerification(
 	return &PhoneVerificationRequiredResponse{
 		Status:         "phone_verification_required",
 		VerificationID: verification.ID.String(),
-		MaskedPhone:    maskPhone(*user.Phone),
+		MaskedPhone:    maskPhone(user.Phone),
 	}, nil
 }
 
@@ -500,7 +500,7 @@ func (s *service) CompleteOAuthSignup(
 		return nil, ErrEmailTaken
 	}
 
-	phoneOwner, err := s.repo.GetUserByPhone(ctx, &phone)
+	phoneOwner, err := s.repo.GetUserByPhone(ctx, phone)
 	switch {
 	case err == nil:
 		if !emailExists || phoneOwner.ID != existing.ID {
@@ -519,7 +519,7 @@ func (s *service) CompleteOAuthSignup(
 				Role:         string(in.Role),
 				FirstName:    &firstName,
 				LastName:     &lastName,
-				Phone:        &phone,
+				Phone:        phone,
 			Username:     username,
 			InstagramURL: instagram,
 		},
@@ -536,7 +536,7 @@ func (s *service) CompleteOAuthSignup(
 		Role:         string(in.Role),
 		FirstName:    &firstName,
 		LastName:     &lastName,
-		Phone:        &phone,
+		Phone:        phone,
 		Username:     username,
 		InstagramURL: instagram,
 	})
