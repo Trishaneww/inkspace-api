@@ -1093,14 +1093,31 @@ func (s *service) SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, 
 		size                                                      int32
 	}{
 		{"Maya Chen", "maya@example.com", "forearm", "Fine-line botanical half sleeve, black and grey.", "custom", "black_and_grey", 8},
-		{"Devon Park", "devon@example.com", "ribs", "Loves the koi flash piece — slightly enlarged.", "flash", "color", 6},
-		{"Sam Rivera", "sam@example.com", "calf", "Traditional eagle, full colour.", "custom", "color", 10},
-		{"Jordan Lee", "jordan@example.com", "shoulder", "Small geometric mountain range.", "custom", "black_and_grey", 4},
-		{"Avery Brooks", "avery@example.com", "wrist", "Matching script with partner.", "custom", "either", 3},
+		{"Olivia West", "olivia@example.com", "spine", "Delicate wildflower trail down the spine.", "custom", "black_and_grey", 6},
+		{"Hugo Reyes", "hugo@example.com", "calf", "Neo-traditional fox among autumn leaves.", "custom", "color", 8},
 		{"Riley Quinn", "riley@example.com", "thigh", "Ornamental mandala, dotwork.", "custom", "black_and_grey", 7},
+		{"Sam Rivera", "sam@example.com", "calf", "Traditional eagle, full colour.", "custom", "color", 10},
+		{"Mason Cole", "mason@example.com", "ribs", "Loves the koi flash piece — slightly enlarged.", "flash", "color", 6},
+		{"Emma Ford", "emma@example.com", "forearm", "Minimalist line portrait of her dog.", "custom", "black_and_grey", 4},
+		{"Avery Brooks", "avery@example.com", "wrist", "Matching script with partner.", "custom", "either", 3},
+		{"Maya Chen", "maya@example.com", "upper arm", "Second piece — continues the botanical sleeve.", "custom", "black_and_grey", 7},
 	}
 
 	customAnswers := []byte(`[{"prompt":"Is this your first tattoo?","answer":"No — this is my third."}]`)
+
+	type sessionSeed struct {
+		completedDaysAgo []int
+		upcomingInDays   int
+	}
+	sessionsByIndex := map[int]sessionSeed{
+		0: {completedDaysAgo: []int{21}},  // Maya — most recent piece (healing)
+		2: {upcomingInDays: 5},            // Hugo — booked
+		3: {completedDaysAgo: []int{63}},  // Riley — touch-up due
+		4: {completedDaysAgo: []int{240}}, // Sam — settled
+		6: {completedDaysAgo: []int{34}},  // Emma — touch-up due
+		7: {upcomingInDays: 10},           // Avery — booked
+		8: {completedDaysAgo: []int{120}}, // Maya — earlier piece, makes her a repeat client
+	}
 
 	for i, sample := range samples {
 		size := sample.size
@@ -1160,7 +1177,42 @@ func (s *service) SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, 
 				return i, err
 			}
 		}
+
+		seed := sessionsByIndex[i]
+		for _, daysAgo := range seed.completedDaysAgo {
+			if err := s.seedSession(ctx, artist.ID, created.ID, "completed", -daysAgo); err != nil {
+				return i, err
+			}
+		}
+		if seed.upcomingInDays > 0 {
+			if err := s.seedSession(ctx, artist.ID, created.ID, "scheduled", seed.upcomingInDays); err != nil {
+				return i, err
+			}
+		}
+		if len(seed.completedDaysAgo) > 0 || seed.upcomingInDays > 0 {
+			if _, err := s.repo.UpdateBookingRequestStatus(ctx, sqlc.UpdateBookingRequestStatusParams{
+				ID:       created.ID,
+				ArtistID: artist.ID,
+				Status:   "accepted",
+			}); err != nil {
+				return i, err
+			}
+		}
 	}
 
 	return len(samples), nil
+}
+
+func (s *service) seedSession(ctx context.Context, artistID, requestID uuid.UUID, status string, offsetDays int) error {
+	start := time.Now().AddDate(0, 0, offsetDays)
+	_, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
+		ArtistID:         artistID,
+		BookingRequestID: requestID,
+		Type:             "session",
+		Status:           status,
+		ScheduledStart:   pgtype.Timestamptz{Time: start, Valid: true},
+		DurationMinutes:  180,
+		SchedulingOrigin: "artist_set",
+	})
+	return err
 }
