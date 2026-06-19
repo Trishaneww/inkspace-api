@@ -60,6 +60,7 @@ type Querier interface {
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
+	GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (GetArtistEarningsRow, error)
 	GetArtistLocation(ctx context.Context, arg GetArtistLocationParams) (ArtistLocation, error)
 	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
@@ -113,6 +114,7 @@ type Querier interface {
 	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]PaymentRequest, error)
 	ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]PaymentRequest, error)
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
+	ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListRecentPaidPaymentsForArtistRow, error)
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 	MarkPaymentRequestEmailed(ctx context.Context, arg MarkPaymentRequestEmailedParams) (PaymentRequest, error)
@@ -131,6 +133,7 @@ type Querier interface {
 	RevokeActivePhoneVerificationsForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	SeedMarkPaymentPaid(ctx context.Context, arg SeedMarkPaymentPaidParams) error
 	SetAppointmentCalendarEvent(ctx context.Context, arg SetAppointmentCalendarEventParams) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
 	SetBookingDepositStatus(ctx context.Context, arg SetBookingDepositStatusParams) error

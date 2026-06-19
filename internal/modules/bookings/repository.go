@@ -57,6 +57,8 @@ type Repository interface {
 
 	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.PaymentRequest, error)
 	ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.PaymentRequest, error)
+	CreatePaymentRequest(ctx context.Context, params sqlc.CreatePaymentRequestParams) (sqlc.PaymentRequest, error)
+	SeedMarkPaymentPaid(ctx context.Context, params sqlc.SeedMarkPaymentPaidParams) error
 }
 
 type repository struct {
@@ -222,4 +224,12 @@ func (r *repository) ListPaymentRequestsByArtist(ctx context.Context, artistID u
 
 func (r *repository) ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.PaymentRequest, error) {
 	return r.q.ListPaymentRequestsByBooking(ctx, bookingRequestID)
+}
+
+func (r *repository) CreatePaymentRequest(ctx context.Context, params sqlc.CreatePaymentRequestParams) (sqlc.PaymentRequest, error) {
+	return r.q.CreatePaymentRequest(ctx, params)
+}
+
+func (r *repository) SeedMarkPaymentPaid(ctx context.Context, params sqlc.SeedMarkPaymentPaidParams) error {
+	return r.q.SeedMarkPaymentPaid(ctx, params)
 }

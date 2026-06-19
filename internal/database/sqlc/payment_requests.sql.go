@@ -198,6 +198,44 @@ func (q *Queries) CreatePaymentRequest(ctx context.Context, arg CreatePaymentReq
 	return i, err
 }
 
+const getArtistEarnings = `-- name: GetArtistEarnings :one
+SELECT
+    COALESCE(SUM(client_charge_cents), 0)::bigint AS collected_cents,
+    COALESCE(SUM(platform_fee_cents), 0)::bigint AS fee_cents,
+    COUNT(*)::bigint AS paid_count,
+    COALESCE(SUM(client_charge_cents) FILTER (
+        WHERE paid_at >= date_trunc('month', now())), 0)::bigint AS month_collected_cents,
+    COALESCE(SUM(platform_fee_cents) FILTER (
+        WHERE paid_at >= date_trunc('month', now())), 0)::bigint AS month_fee_cents,
+    COUNT(*) FILTER (
+        WHERE paid_at >= date_trunc('month', now()))::bigint AS month_paid_count
+FROM payment_requests
+WHERE artist_id = $1 AND status = 'paid'
+`
+
+type GetArtistEarningsRow struct {
+	CollectedCents      int64 `json:"collected_cents"`
+	FeeCents            int64 `json:"fee_cents"`
+	PaidCount           int64 `json:"paid_count"`
+	MonthCollectedCents int64 `json:"month_collected_cents"`
+	MonthFeeCents       int64 `json:"month_fee_cents"`
+	MonthPaidCount      int64 `json:"month_paid_count"`
+}
+
+func (q *Queries) GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (GetArtistEarningsRow, error) {
+	row := q.db.QueryRow(ctx, getArtistEarnings, artistID)
+	var i GetArtistEarningsRow
+	err := row.Scan(
+		&i.CollectedCents,
+		&i.FeeCents,
+		&i.PaidCount,
+		&i.MonthCollectedCents,
+		&i.MonthFeeCents,
+		&i.MonthPaidCount,
+	)
+	return i, err
+}
+
 const getPaymentRequestByPaymentIntent = `-- name: GetPaymentRequestByPaymentIntent :one
 SELECT id, artist_id, booking_request_id, type, status, currency, amount_cents, platform_fee_cents, client_charge_cents, fee_payer, amount_refunded_cents, client_email, client_name, description, public_token, stripe_checkout_session_id, stripe_payment_intent_id, expires_at, paid_at, canceled_at, created_at, updated_at, last_emailed_at FROM payment_requests WHERE stripe_payment_intent_id = $1
 `
@@ -397,6 +435,70 @@ func (q *Queries) ListPaymentRequestsByBooking(ctx context.Context, bookingReque
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastEmailedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentPaidPaymentsForArtist = `-- name: ListRecentPaidPaymentsForArtist :many
+SELECT
+    pr.id, pr.type, pr.status, pr.currency,
+    pr.amount_cents, pr.platform_fee_cents, pr.client_charge_cents,
+    pr.paid_at, pr.created_at,
+    br.client_name, br.client_email,
+    br.type AS request_type, br.placement
+FROM payment_requests pr
+JOIN booking_requests br ON br.id = pr.booking_request_id
+WHERE pr.artist_id = $1 AND pr.status = 'paid'
+ORDER BY pr.paid_at DESC NULLS LAST
+LIMIT 50
+`
+
+type ListRecentPaidPaymentsForArtistRow struct {
+	ID                uuid.UUID          `json:"id"`
+	Type              string             `json:"type"`
+	Status            string             `json:"status"`
+	Currency          string             `json:"currency"`
+	AmountCents       int64              `json:"amount_cents"`
+	PlatformFeeCents  int64              `json:"platform_fee_cents"`
+	ClientChargeCents int64              `json:"client_charge_cents"`
+	PaidAt            pgtype.Timestamptz `json:"paid_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ClientName        string             `json:"client_name"`
+	ClientEmail       string             `json:"client_email"`
+	RequestType       string             `json:"request_type"`
+	Placement         string             `json:"placement"`
+}
+
+func (q *Queries) ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListRecentPaidPaymentsForArtistRow, error) {
+	rows, err := q.db.Query(ctx, listRecentPaidPaymentsForArtist, artistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentPaidPaymentsForArtistRow
+	for rows.Next() {
+		var i ListRecentPaidPaymentsForArtistRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.Currency,
+			&i.AmountCents,
+			&i.PlatformFeeCents,
+			&i.ClientChargeCents,
+			&i.PaidAt,
+			&i.CreatedAt,
+			&i.ClientName,
+			&i.ClientEmail,
+			&i.RequestType,
+			&i.Placement,
 		); err != nil {
 			return nil, err
 		}
@@ -663,6 +765,22 @@ func (q *Queries) RefundPaymentRequestByPaymentIntent(ctx context.Context, arg R
 		&i.LastEmailedAt,
 	)
 	return i, err
+}
+
+const seedMarkPaymentPaid = `-- name: SeedMarkPaymentPaid :exec
+UPDATE payment_requests
+SET status = 'paid', paid_at = $1, updated_at = now()
+WHERE id = $2
+`
+
+type SeedMarkPaymentPaidParams struct {
+	PaidAt pgtype.Timestamptz `json:"paid_at"`
+	ID     uuid.UUID          `json:"id"`
+}
+
+func (q *Queries) SeedMarkPaymentPaid(ctx context.Context, arg SeedMarkPaymentPaidParams) error {
+	_, err := q.db.Exec(ctx, seedMarkPaymentPaid, arg.PaidAt, arg.ID)
+	return err
 }
 
 const setBookingDepositStatus = `-- name: SetBookingDepositStatus :exec

@@ -97,6 +97,19 @@ func (h *Handler) RefundPaymentRequest(c *gin.Context) {
 	httpx.OK(c, pr)
 }
 
+func (h *Handler) GetEarnings(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	earnings, err := h.svc.GetEarnings(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, earnings)
+}
+
 func (h *Handler) GetPaymentRequest(c *gin.Context) {
 	pr, err := h.svc.GetPublicPaymentRequest(c.Request.Context(), c.Param("token"))
 	if err != nil {

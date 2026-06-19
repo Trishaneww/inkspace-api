@@ -1,8 +1,10 @@
 package payments
 
 import (
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
@@ -68,6 +70,68 @@ type ClientSession = clientaccount.Session
 
 type CheckoutResponse struct {
 	URL string `json:"url"`
+}
+
+type Earnings struct {
+	IssuerName     string          `json:"issuerName"`
+	Currency       string          `json:"currency"`
+	AllTime        EarningsTotals  `json:"allTime"`
+	ThisMonth      EarningsTotals  `json:"thisMonth"`
+	RecentPayments []RecentPayment `json:"recentPayments"`
+}
+
+type EarningsTotals struct {
+	CollectedCents int64 `json:"collectedCents"`
+	FeeCents       int64 `json:"feeCents"`
+	NetCents       int64 `json:"netCents"`
+	Count          int64 `json:"count"`
+}
+
+type RecentPayment struct {
+	ID                string `json:"id"`
+	Reference         string `json:"reference"`
+	Type              string `json:"type"`
+	Status            string `json:"status"`
+	Currency          string `json:"currency"`
+	AmountCents       int64  `json:"amountCents"`
+	PlatformFeeCents  int64  `json:"platformFeeCents"`
+	ClientChargeCents int64  `json:"clientChargeCents"`
+	ClientName        string `json:"clientName"`
+	ClientEmail       string `json:"clientEmail"`
+	RequestType       string `json:"requestType"`
+	Placement         string `json:"placement"`
+	PaidAt            string `json:"paidAt"`
+}
+
+func earningsTotals(collected, fee, count int64) EarningsTotals {
+	return EarningsTotals{
+		CollectedCents: collected,
+		FeeCents:       fee,
+		NetCents:       collected - fee,
+		Count:          count,
+	}
+}
+
+func recentPaymentFromRow(row sqlc.ListRecentPaidPaymentsForArtistRow) RecentPayment {
+	return RecentPayment{
+		ID:                row.ID.String(),
+		Reference:         invoiceReference(row.ID),
+		Type:              row.Type,
+		Status:            row.Status,
+		Currency:          row.Currency,
+		AmountCents:       row.AmountCents,
+		PlatformFeeCents:  row.PlatformFeeCents,
+		ClientChargeCents: row.ClientChargeCents,
+		ClientName:        row.ClientName,
+		ClientEmail:       row.ClientEmail,
+		RequestType:       row.RequestType,
+		Placement:         row.Placement,
+		PaidAt:            formatTimestamp(row.PaidAt),
+	}
+}
+
+func invoiceReference(id uuid.UUID) string {
+	return "INV-" + strings.ToUpper(strings.ReplaceAll(id.String(), "-", "")[:8])
 }
 
 func paymentRequestFromRow(row sqlc.PaymentRequest, payURL string) PaymentRequest {

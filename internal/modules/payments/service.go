@@ -44,6 +44,7 @@ type Service interface {
 	CancelPaymentRequest(ctx context.Context, userID, paymentRequestID uuid.UUID) (PaymentRequest, error)
 	ResendPaymentRequest(ctx context.Context, userID, paymentRequestID uuid.UUID) (PaymentRequest, error)
 	RefundPaymentRequest(ctx context.Context, userID, paymentRequestID uuid.UUID) (PaymentRequest, error)
+	GetEarnings(ctx context.Context, userID uuid.UUID) (Earnings, error)
 
 	GetPublicPaymentRequest(ctx context.Context, token string) (PublicPaymentRequest, error)
 	CreateCheckout(ctx context.Context, token string) (CheckoutResponse, error)
@@ -491,6 +492,40 @@ func (s *service) isExpired(row sqlc.PaymentRequest) bool {
 
 func (s *service) payLinkURL(token string) string {
 	return s.cfg.FrontendURL + "/pay/" + token
+}
+
+func (s *service) GetEarnings(ctx context.Context, userID uuid.UUID) (Earnings, error) {
+	artist, err := s.repo.GetArtistByUserID(ctx, userID)
+	if err != nil {
+		return Earnings{}, err
+	}
+
+	totals, err := s.repo.GetArtistEarnings(ctx, artist.ID)
+	if err != nil {
+		return Earnings{}, err
+	}
+	rows, err := s.repo.ListRecentPaidPaymentsForArtist(ctx, artist.ID)
+	if err != nil {
+		return Earnings{}, err
+	}
+
+	currency := "CAD"
+	if settings, err := s.repo.GetArtistSettings(ctx, artist.ID); err == nil && settings.Currency != "" {
+		currency = settings.Currency
+	}
+
+	recent := make([]RecentPayment, 0, len(rows))
+	for _, row := range rows {
+		recent = append(recent, recentPaymentFromRow(row))
+	}
+
+	return Earnings{
+		IssuerName:     s.artistDisplayName(ctx, artist.ID),
+		Currency:       currency,
+		AllTime:        earningsTotals(totals.CollectedCents, totals.FeeCents, totals.PaidCount),
+		ThisMonth:      earningsTotals(totals.MonthCollectedCents, totals.MonthFeeCents, totals.MonthPaidCount),
+		RecentPayments: recent,
+	}, nil
 }
 
 func (s *service) artistDisplayName(ctx context.Context, artistID uuid.UUID) string {

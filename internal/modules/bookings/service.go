@@ -1119,6 +1119,20 @@ func (s *service) SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, 
 		8: {completedDaysAgo: []int{120}}, // Maya — earlier piece, makes her a repeat client
 	}
 
+	type paymentSeed struct {
+		amountCents int64
+		payType     string
+		feePayer    string
+		daysAgo     int
+	}
+	paymentsByIndex := map[int][]paymentSeed{
+		0: {{15000, "deposit", "client", 3}, {35000, "final", "client", 1}},
+		3: {{12000, "deposit", "artist", 60}},
+		4: {{20000, "deposit", "split", 240}, {40000, "final", "artist", 230}},
+		6: {{10000, "deposit", "client", 9}},
+		8: {{18000, "deposit", "artist", 120}},
+	}
+
 	for i, sample := range samples {
 		size := sample.size
 		phone := "+1 (555) 010-00" + strconv.Itoa(10+i)
@@ -1194,6 +1208,50 @@ func (s *service) SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, 
 				ID:       created.ID,
 				ArtistID: artist.ID,
 				Status:   "accepted",
+			}); err != nil {
+				return i, err
+			}
+		}
+
+		for _, p := range paymentsByIndex[i] {
+			fee := max(p.amountCents*6/100, 200)
+			clientCharge := p.amountCents
+			switch p.feePayer {
+			case "client":
+				clientCharge = p.amountCents + fee
+			case "split":
+				clientCharge = p.amountCents + fee/2
+			}
+
+			token, err := newScheduleToken()
+			if err != nil {
+				return i, err
+			}
+			label := "Final payment"
+			if p.payType == "deposit" {
+				label = "Deposit"
+			}
+			payment, err := s.repo.CreatePaymentRequest(ctx, sqlc.CreatePaymentRequestParams{
+				ArtistID:          artist.ID,
+				BookingRequestID:  created.ID,
+				Type:              p.payType,
+				Currency:          "CAD",
+				AmountCents:       p.amountCents,
+				PlatformFeeCents:  fee,
+				ClientChargeCents: clientCharge,
+				FeePayer:          p.feePayer,
+				ClientEmail:       created.ClientEmail,
+				ClientName:        created.ClientName,
+				Description:       label,
+				PublicToken:       token,
+				ExpiresAt:         pgtype.Timestamptz{Time: time.Now().AddDate(0, 0, 7), Valid: true},
+			})
+			if err != nil {
+				return i, err
+			}
+			if err := s.repo.SeedMarkPaymentPaid(ctx, sqlc.SeedMarkPaymentPaidParams{
+				ID:     payment.ID,
+				PaidAt: pgtype.Timestamptz{Time: time.Now().AddDate(0, 0, -p.daysAgo), Valid: true},
 			}); err != nil {
 				return i, err
 			}

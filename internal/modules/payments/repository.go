@@ -21,6 +21,9 @@ type Repository interface {
 	LinkBookingRequestsToClient(ctx context.Context, params sqlc.LinkBookingRequestsToClientParams) error
 	GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error)
 
+	GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (sqlc.GetArtistEarningsRow, error)
+	ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.ListRecentPaidPaymentsForArtistRow, error)
+
 	CreatePaymentRequest(ctx context.Context, params sqlc.CreatePaymentRequestParams) (sqlc.PaymentRequest, error)
 	GetPaymentRequestByToken(ctx context.Context, token string) (sqlc.PaymentRequest, error)
 	GetPaymentRequestForArtist(ctx context.Context, params sqlc.GetPaymentRequestForArtistParams) (sqlc.PaymentRequest, error)
@@ -62,6 +65,14 @@ func (r *repository) GetArtistSettings(ctx context.Context, artistID uuid.UUID) 
 
 func (r *repository) GetUserByID(ctx context.Context, id uuid.UUID) (sqlc.User, error) {
 	return r.q.GetUserByID(ctx, id)
+}
+
+func (r *repository) GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (sqlc.GetArtistEarningsRow, error) {
+	return r.q.GetArtistEarnings(ctx, artistID)
+}
+
+func (r *repository) ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.ListRecentPaidPaymentsForArtistRow, error) {
+	return r.q.ListRecentPaidPaymentsForArtist(ctx, artistID)
 }
 
 func (r *repository) GetUserByEmail(ctx context.Context, email string) (sqlc.User, error) {

@@ -108,3 +108,35 @@ UPDATE booking_requests
 SET deposit_status = @deposit_status::text,
     updated_at     = now()
 WHERE id = @booking_request_id;
+
+-- name: GetArtistEarnings :one
+SELECT
+    COALESCE(SUM(client_charge_cents), 0)::bigint AS collected_cents,
+    COALESCE(SUM(platform_fee_cents), 0)::bigint AS fee_cents,
+    COUNT(*)::bigint AS paid_count,
+    COALESCE(SUM(client_charge_cents) FILTER (
+        WHERE paid_at >= date_trunc('month', now())), 0)::bigint AS month_collected_cents,
+    COALESCE(SUM(platform_fee_cents) FILTER (
+        WHERE paid_at >= date_trunc('month', now())), 0)::bigint AS month_fee_cents,
+    COUNT(*) FILTER (
+        WHERE paid_at >= date_trunc('month', now()))::bigint AS month_paid_count
+FROM payment_requests
+WHERE artist_id = @artist_id AND status = 'paid';
+
+-- name: ListRecentPaidPaymentsForArtist :many
+SELECT
+    pr.id, pr.type, pr.status, pr.currency,
+    pr.amount_cents, pr.platform_fee_cents, pr.client_charge_cents,
+    pr.paid_at, pr.created_at,
+    br.client_name, br.client_email,
+    br.type AS request_type, br.placement
+FROM payment_requests pr
+JOIN booking_requests br ON br.id = pr.booking_request_id
+WHERE pr.artist_id = @artist_id AND pr.status = 'paid'
+ORDER BY pr.paid_at DESC NULLS LAST
+LIMIT 50;
+
+-- name: SeedMarkPaymentPaid :exec
+UPDATE payment_requests
+SET status = 'paid', paid_at = @paid_at, updated_at = now()
+WHERE id = @id;
