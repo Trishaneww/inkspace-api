@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/httpx"
 	"github.com/trishaneupnexx/inkspace-api/internal/middleware"
@@ -220,6 +221,85 @@ func (h *Handler) Decline(c *gin.Context) {
 	httpx.OK(c, inquiry)
 }
 
+func (h *Handler) ListSlots(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	slots, err := h.svc.ListAvailableSlots(c.Request.Context(), userID, id, c.Query("date"))
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, slots)
+}
+
+func (h *Handler) ScheduleBooking(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var input ScheduleBookingInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, http.StatusBadRequest, "invalid_input", "invalid request body")
+		return
+	}
+	inquiry, err := h.svc.ScheduleClientBooking(c.Request.Context(), userID, id, input)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, inquiry)
+}
+
+func (h *Handler) GetPublicBooking(c *gin.Context) {
+	req, err := h.svc.GetPublicBookingRequest(c.Request.Context(), c.Param("token"))
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, req)
+}
+
+func (h *Handler) CreateBookingAccount(c *gin.Context) {
+	var input CreateClientAccountInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, http.StatusBadRequest, "invalid_input", "invalid request body")
+		return
+	}
+	session, err := h.svc.CreateClientAccountFromBooking(c.Request.Context(), c.Param("token"), input)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.Created(c, session)
+}
+
+func (h *Handler) ResendScheduleLink(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	inquiry, err := h.svc.ResendScheduleLink(c.Request.Context(), userID, id)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, inquiry)
+}
+
 func (h *Handler) Reopen(c *gin.Context) {
 	userID, ok := requireUserID(c)
 	if !ok {
@@ -284,6 +364,18 @@ func respondError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusBadRequest, "invalid_input", err.Error())
 	case errors.Is(err, ErrScheduleConflict):
 		httpx.Error(c, http.StatusConflict, "schedule_conflict", err.Error())
+	case errors.Is(err, ErrNotAwaitingClient):
+		httpx.Error(c, http.StatusConflict, "not_awaiting_client", err.Error())
+	case errors.Is(err, ErrSlotUnavailable):
+		httpx.Error(c, http.StatusConflict, "slot_unavailable", err.Error())
+	case errors.Is(err, clientaccount.ErrAccountExists):
+		httpx.Error(c, http.StatusConflict, "account_exists", err.Error())
+	case errors.Is(err, clientaccount.ErrPhoneRequired):
+		httpx.Error(c, http.StatusBadRequest, "phone_required", err.Error())
+	case errors.Is(err, clientaccount.ErrPhoneTaken):
+		httpx.Error(c, http.StatusConflict, "phone_taken", err.Error())
+	case errors.Is(err, clientaccount.ErrWeakPassword):
+		httpx.Error(c, http.StatusBadRequest, "weak_password", err.Error())
 	default:
 		httpx.Error(c, http.StatusInternalServerError, "internal_error", "an unexpected error occurred")
 	}

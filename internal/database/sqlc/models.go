@@ -149,6 +149,8 @@ type BookingRequest struct {
 	ColorType              string             `json:"color_type"`
 	LocationID             pgtype.UUID        `json:"location_id"`
 	FlashSizeCode          string             `json:"flash_size_code"`
+	ScheduleToken          *string            `json:"schedule_token"`
+	ScheduleEmailedAt      pgtype.Timestamptz `json:"schedule_emailed_at"`
 }
 
 type Flash struct {
@@ -280,7 +282,7 @@ type User struct {
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	FirstName            *string            `json:"first_name"`
 	LastName             *string            `json:"last_name"`
-	Phone                *string            `json:"phone"`
+	Phone                string             `json:"phone"`
 	PhoneVerifiedAt      pgtype.Timestamptz `json:"phone_verified_at"`
 	Username             *string            `json:"username"`
 	AvatarURL            *string            `json:"avatar_url"`

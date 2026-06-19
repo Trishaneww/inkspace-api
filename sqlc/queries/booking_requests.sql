@@ -75,3 +75,24 @@ SET client_user_id = @client_user_id,
     updated_at = now()
 WHERE client_email = @client_email
   AND client_user_id IS NULL;
+
+-- name: SetScheduleToken :one
+UPDATE booking_requests
+SET schedule_token      = @schedule_token::text,
+    schedule_emailed_at = now(),
+    updated_at          = now()
+WHERE id = @id AND artist_id = @artist_id
+RETURNING *;
+
+-- name: TouchScheduleEmailedAt :one
+UPDATE booking_requests
+SET schedule_emailed_at = now(),
+    updated_at          = now()
+WHERE id = @id AND artist_id = @artist_id
+RETURNING *;
+
+-- name: GetBookingRequestByScheduleToken :one
+SELECT * FROM booking_requests WHERE schedule_token = $1;
+
+-- name: GetClientBookingRequest :one
+SELECT * FROM booking_requests WHERE id = $1 AND client_email = $2;

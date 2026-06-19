@@ -2,8 +2,11 @@ package bookings
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/crypto"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
@@ -21,22 +25,29 @@ import (
 const presignViewTTL = 1 * time.Hour
 
 var (
-	ErrNotFound         = errors.New("inquiry not found")
-	ErrNoOpenBook       = errors.New("artist has no open book")
-	ErrInvalidSchedule  = errors.New("invalid schedule: a session length is required, and a start time is required when you schedule clients yourself")
-	ErrScheduleConflict = errors.New("that time overlaps an appointment you've already scheduled")
-	ErrInvalidInput     = errors.New("missing or invalid appointment details")
+	ErrNotFound          = errors.New("inquiry not found")
+	ErrNoOpenBook        = errors.New("artist has no open book")
+	ErrInvalidSchedule   = errors.New("invalid schedule: a session length is required, and a start time is required when you schedule clients yourself")
+	ErrScheduleConflict  = errors.New("that time overlaps an appointment you've already scheduled")
+	ErrInvalidInput      = errors.New("missing or invalid appointment details")
+	ErrNotAwaitingClient = errors.New("this booking is not awaiting a time selection")
+	ErrSlotUnavailable   = errors.New("that time is no longer available")
 )
 
 type Service interface {
 	ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryListResponse, error)
 	ListClientInquiries(ctx context.Context, userID uuid.UUID) (ClientInquiryListResponse, error)
+	ListAvailableSlots(ctx context.Context, userID, inquiryID uuid.UUID, date string) (SlotList, error)
+	ScheduleClientBooking(ctx context.Context, userID, inquiryID uuid.UUID, input ScheduleBookingInput) (Inquiry, error)
 	ListCalendarEvents(ctx context.Context, userID uuid.UUID, rangeStart, rangeEnd time.Time) ([]CalendarEvent, error)
 	CreateManualAppointment(ctx context.Context, userID uuid.UUID, input CreateAppointmentInput) (Inquiry, error)
 	GetInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID, input AcceptInput) (Inquiry, error)
 	RequestConsultation(ctx context.Context, userID, inquiryID uuid.UUID, input RequestConsultationInput) (Inquiry, error)
 	RescheduleAppointment(ctx context.Context, userID, inquiryID uuid.UUID, input RescheduleInput) (Inquiry, error)
+	ResendScheduleLink(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
+	GetPublicBookingRequest(ctx context.Context, token string) (PublicBookingRequest, error)
+	CreateClientAccountFromBooking(ctx context.Context, token string, input CreateClientAccountInput) (clientaccount.Session, error)
 	CancelBooking(ctx context.Context, userID, inquiryID uuid.UUID, appointmentID *uuid.UUID) (Inquiry, error)
 	DeclineInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	ReopenInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
@@ -47,10 +58,18 @@ type service struct {
 	repo     Repository
 	s3       *s3client.Client
 	calendar *calendarClient
+	cfg      *config.Config
+	log      *slog.Logger
 }
 
 func NewService(repo Repository, s3 *s3client.Client, cfg *config.Config, cipher *crypto.Cipher) Service {
-	return &service{repo: repo, s3: s3, calendar: newCalendarClient(cfg, cipher)}
+	return &service{
+		repo:     repo,
+		s3:       s3,
+		calendar: newCalendarClient(cfg, cipher),
+		cfg:      cfg,
+		log:      slog.Default(),
+	}
 }
 
 func (s *service) ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryListResponse, error) {
@@ -156,6 +175,14 @@ func stringOrEmpty(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func newScheduleToken() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 func (s *service) ListCalendarEvents(ctx context.Context, userID uuid.UUID, rangeStart, rangeEnd time.Time) ([]CalendarEvent, error) {
@@ -361,7 +388,15 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 	if duration <= 0 {
 		return Inquiry{}, ErrInvalidSchedule
 	}
-	apptStatus, origin, start, err := resolveSchedule(book.SchedulingMode, input.ScheduledStart)
+	mode := book.SchedulingMode
+	if input.ClientScheduled != nil {
+		if *input.ClientScheduled {
+			mode = schedulingClient
+		} else {
+			mode = schedulingArtist
+		}
+	}
+	apptStatus, origin, start, err := resolveSchedule(mode, input.ScheduledStart)
 	if err != nil {
 		return Inquiry{}, err
 	}
@@ -396,16 +431,15 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 			return Inquiry{}, err
 		}
 	}
+	if mode == schedulingClient {
+		s.sendScheduleInvite(ctx, artist.ID, inquiryID, duration)
+	}
 	s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
 	return inquiry, nil
 }
 
 func (s *service) RequestConsultation(ctx context.Context, userID, inquiryID uuid.UUID, input RequestConsultationInput) (Inquiry, error) {
 	artist, err := s.requireArtist(ctx, userID)
-	if err != nil {
-		return Inquiry{}, err
-	}
-	book, err := s.requireOpenBook(ctx, artist.ID)
 	if err != nil {
 		return Inquiry{}, err
 	}
@@ -422,7 +456,7 @@ func (s *service) RequestConsultation(ctx context.Context, userID, inquiryID uui
 		return Inquiry{}, ErrInvalidSchedule
 	}
 
-	apptStatus, origin, start, err := resolveSchedule(book.SchedulingMode, input.ScheduledStart)
+	apptStatus, origin, start, err := resolveSchedule(schedulingArtist, input.ScheduledStart)
 	if err != nil {
 		return Inquiry{}, err
 	}
@@ -504,6 +538,203 @@ func (s *service) RescheduleAppointment(ctx context.Context, userID, inquiryID u
 	}
 	s.syncAppointmentToCalendar(ctx, artist.ID, synced, inquiry)
 	return inquiry, nil
+}
+
+func (s *service) ResendScheduleLink(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error) {
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	row, err := s.repo.GetBookingRequest(ctx, sqlc.GetBookingRequestParams{ID: inquiryID, ArtistID: artist.ID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Inquiry{}, ErrNotFound
+		}
+		return Inquiry{}, err
+	}
+	if row.ScheduleToken == nil || *row.ScheduleToken == "" {
+		return Inquiry{}, ErrNotFound
+	}
+
+	updated, err := s.repo.TouchScheduleEmailedAt(ctx, sqlc.TouchScheduleEmailedAtParams{ID: inquiryID, ArtistID: artist.ID})
+	if err != nil {
+		return Inquiry{}, err
+	}
+	duration := int32(0)
+	if row.SessionDurationMinutes != nil {
+		duration = *row.SessionDurationMinutes
+	}
+	s.sendBookingRequestEmail(updated, s.artistDisplayName(ctx, artist.ID), duration)
+	return s.GetInquiry(ctx, userID, inquiryID)
+}
+
+func (s *service) ListAvailableSlots(ctx context.Context, userID, inquiryID uuid.UUID, date string) (SlotList, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return SlotList{}, err
+	}
+	row, err := s.repo.GetClientBookingRequest(ctx, sqlc.GetClientBookingRequestParams{
+		ID:          inquiryID,
+		ClientEmail: user.Email,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SlotList{}, ErrNotFound
+		}
+		return SlotList{}, err
+	}
+
+	appt, err := s.repo.GetLatestAppointmentByRequest(ctx, inquiryID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SlotList{}, ErrNotAwaitingClient
+		}
+		return SlotList{}, err
+	}
+	if appt.Status != appointmentProposed || appt.ScheduledStart.Valid {
+		return SlotList{}, ErrNotAwaitingClient
+	}
+
+	settings, err := s.repo.GetArtistSettings(ctx, row.ArtistID)
+	if err != nil {
+		return SlotList{}, err
+	}
+	windows, err := s.repo.ListAvailabilityWindows(ctx, row.ArtistID)
+	if err != nil {
+		return SlotList{}, err
+	}
+
+	loc := loadLocation(settings.Timezone)
+	day, err := time.ParseInLocation("2006-01-02", date, loc)
+	if err != nil {
+		return SlotList{}, ErrInvalidInput
+	}
+	busy, err := s.repo.ListAppointmentsByArtistInRange(ctx, sqlc.ListAppointmentsByArtistInRangeParams{
+		ArtistID:   row.ArtistID,
+		RangeStart: pgtype.Timestamptz{Time: day, Valid: true},
+		RangeEnd:   pgtype.Timestamptz{Time: day.AddDate(0, 0, 1), Valid: true},
+	})
+	if err != nil {
+		return SlotList{}, err
+	}
+
+	slots := buildSlots(day, loc, windows, busy, appt.DurationMinutes, settings, time.Now())
+	return SlotList{Slots: slots, DurationMinutes: appt.DurationMinutes}, nil
+}
+
+func (s *service) ScheduleClientBooking(ctx context.Context, userID, inquiryID uuid.UUID, input ScheduleBookingInput) (Inquiry, error) {
+	if input.ScheduledStart.IsZero() {
+		return Inquiry{}, ErrInvalidInput
+	}
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	row, err := s.repo.GetClientBookingRequest(ctx, sqlc.GetClientBookingRequestParams{
+		ID:          inquiryID,
+		ClientEmail: user.Email,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Inquiry{}, ErrNotFound
+		}
+		return Inquiry{}, err
+	}
+
+	appt, err := s.repo.GetLatestAppointmentByRequest(ctx, inquiryID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Inquiry{}, ErrNotAwaitingClient
+		}
+		return Inquiry{}, err
+	}
+	if appt.Status != appointmentProposed || appt.ScheduledStart.Valid {
+		return Inquiry{}, ErrNotAwaitingClient
+	}
+
+	settings, err := s.repo.GetArtistSettings(ctx, row.ArtistID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	windows, err := s.repo.ListAvailabilityWindows(ctx, row.ArtistID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	loc := loadLocation(settings.Timezone)
+	startLocal := input.ScheduledStart.In(loc)
+	day := time.Date(startLocal.Year(), startLocal.Month(), startLocal.Day(), 0, 0, 0, 0, loc)
+	busy, err := s.repo.ListAppointmentsByArtistInRange(ctx, sqlc.ListAppointmentsByArtistInRangeParams{
+		ArtistID:   row.ArtistID,
+		RangeStart: pgtype.Timestamptz{Time: day, Valid: true},
+		RangeEnd:   pgtype.Timestamptz{Time: day.AddDate(0, 0, 1), Valid: true},
+	})
+	if err != nil {
+		return Inquiry{}, err
+	}
+	slots := buildSlots(day, loc, windows, busy, appt.DurationMinutes, settings, time.Now())
+	if !containsSlot(slots, input.ScheduledStart.UTC().Format(time.RFC3339)) {
+		return Inquiry{}, ErrSlotUnavailable
+	}
+
+	synced, err := s.repo.UpdateAppointmentSchedule(ctx, sqlc.UpdateAppointmentScheduleParams{
+		ID:             appt.ID,
+		ArtistID:       row.ArtistID,
+		ScheduledStart: pgtype.Timestamptz{Time: input.ScheduledStart, Valid: true},
+	})
+	if err != nil {
+		return Inquiry{}, err
+	}
+
+	inquiry := inquiryFromRow(row)
+	inquiry.Appointment = appointmentFromRow(synced)
+	s.syncAppointmentToCalendar(ctx, row.ArtistID, synced, inquiry)
+
+	whenLabel := startLocal.Format("Monday, January 2 at 3:04 PM")
+	s.sendBookingConfirmedEmail(row, s.artistDisplayName(ctx, row.ArtistID), whenLabel, appt.DurationMinutes)
+	return inquiry, nil
+}
+
+func (s *service) GetPublicBookingRequest(ctx context.Context, token string) (PublicBookingRequest, error) {
+	row, err := s.repo.GetBookingRequestByScheduleToken(ctx, &token)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return PublicBookingRequest{}, ErrNotFound
+		}
+		return PublicBookingRequest{}, err
+	}
+	email := clientaccount.NormalizeEmail(row.ClientEmail)
+	_, userErr := s.repo.GetUserByEmail(ctx, email)
+
+	duration := int32(0)
+	if row.SessionDurationMinutes != nil {
+		duration = *row.SessionDurationMinutes
+	}
+	return PublicBookingRequest{
+		ArtistName:      s.artistDisplayName(ctx, row.ArtistID),
+		ClientEmail:     email,
+		ClientName:      row.ClientName,
+		Status:          row.Status,
+		DurationMinutes: duration,
+		HasAccount:      userErr == nil,
+	}, nil
+}
+
+func (s *service) CreateClientAccountFromBooking(ctx context.Context, token string, input CreateClientAccountInput) (clientaccount.Session, error) {
+	row, err := s.repo.GetBookingRequestByScheduleToken(ctx, &token)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return clientaccount.Session{}, ErrNotFound
+		}
+		return clientaccount.Session{}, err
+	}
+	return clientaccount.Create(ctx, s.repo, s.cfg, row.ClientEmail, clientaccount.Input{
+		FirstName:      input.FirstName,
+		LastName:       input.LastName,
+		Phone:          input.Phone,
+		Password:       input.Password,
+		MarketingOptIn: input.MarketingOptIn,
+	}, "book_page")
 }
 
 func (s *service) resolveRescheduleTarget(ctx context.Context, inquiryID uuid.UUID, appointmentID *string) (sqlc.Appointment, error) {

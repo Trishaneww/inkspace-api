@@ -31,6 +31,7 @@ const (
 // CHECK constraints (open_books.scheduling_mode, appointments.*).
 const (
 	schedulingArtist = "artist_scheduled"
+	schedulingClient = "client_scheduled"
 
 	appointmentProposed  = "proposed"
 	appointmentScheduled = "scheduled"
@@ -167,9 +168,41 @@ type ClientInquiryListResponse struct {
 
 // ── Request payloads ─────────────────────────────────────────────────────────
 
+type ScheduleBookingInput struct {
+	ScheduledStart time.Time `json:"scheduledStart"`
+}
+
+type SlotOption struct {
+	Start string `json:"start"` // RFC3339 (UTC) absolute start
+	Label string `json:"label"` // e.g. "2:00 PM", in the artist's timezone
+}
+
+type SlotList struct {
+	Slots           []SlotOption `json:"slots"`
+	DurationMinutes int32        `json:"durationMinutes"`
+}
+
+type PublicBookingRequest struct {
+	ArtistName      string `json:"artistName"`
+	ClientEmail     string `json:"clientEmail"`
+	ClientName      string `json:"clientName"`
+	Status          string `json:"status"`
+	DurationMinutes int32  `json:"durationMinutes"`
+	HasAccount      bool   `json:"hasAccount"`
+}
+
+type CreateClientAccountInput struct {
+	FirstName      string `json:"firstName"`
+	LastName       string `json:"lastName"`
+	Phone          string `json:"phone"`
+	Password       string `json:"password"`
+	MarketingOptIn bool   `json:"marketingOptIn"`
+}
+
 type AcceptInput struct {
 	SessionDurationMinutes *int32     `json:"sessionDurationMinutes"`
 	ScheduledStart         *time.Time `json:"scheduledStart"`
+	ClientScheduled *bool `json:"clientScheduled"`
 }
 
 type RequestConsultationInput struct {

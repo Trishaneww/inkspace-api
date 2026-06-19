@@ -29,6 +29,17 @@ type Repository interface {
 	GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error)
 	UpdateBookingRequestStatus(ctx context.Context, params sqlc.UpdateBookingRequestStatusParams) (sqlc.BookingRequest, error)
 	ReopenBookingRequest(ctx context.Context, params sqlc.ReopenBookingRequestParams) (sqlc.BookingRequest, error)
+	SetScheduleToken(ctx context.Context, params sqlc.SetScheduleTokenParams) (sqlc.BookingRequest, error)
+	TouchScheduleEmailedAt(ctx context.Context, params sqlc.TouchScheduleEmailedAtParams) (sqlc.BookingRequest, error)
+	GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (sqlc.BookingRequest, error)
+	GetClientBookingRequest(ctx context.Context, params sqlc.GetClientBookingRequestParams) (sqlc.BookingRequest, error)
+
+	// Express client-account creation (satisfies clientaccount.Store).
+	GetUserByEmail(ctx context.Context, email string) (sqlc.User, error)
+	CreateUser(ctx context.Context, params sqlc.CreateUserParams) (sqlc.User, error)
+	SetUserMarketingOptIn(ctx context.Context, params sqlc.SetUserMarketingOptInParams) error
+	LinkBookingRequestsToClient(ctx context.Context, params sqlc.LinkBookingRequestsToClientParams) error
+	CreateRefreshToken(ctx context.Context, params sqlc.CreateRefreshTokenParams) (sqlc.RefreshToken, error)
 	GetFlash(ctx context.Context, flashID uuid.UUID) (sqlc.Flash, error)
 	ClaimFlash(ctx context.Context, params sqlc.ClaimFlashParams) (sqlc.Flash, error)
 	DeclineOtherFlashRequests(ctx context.Context, params sqlc.DeclineOtherFlashRequestsParams) error
@@ -115,6 +126,42 @@ func (r *repository) UpdateBookingRequestStatus(ctx context.Context, params sqlc
 
 func (r *repository) ReopenBookingRequest(ctx context.Context, params sqlc.ReopenBookingRequestParams) (sqlc.BookingRequest, error) {
 	return r.q.ReopenBookingRequest(ctx, params)
+}
+
+func (r *repository) SetScheduleToken(ctx context.Context, params sqlc.SetScheduleTokenParams) (sqlc.BookingRequest, error) {
+	return r.q.SetScheduleToken(ctx, params)
+}
+
+func (r *repository) TouchScheduleEmailedAt(ctx context.Context, params sqlc.TouchScheduleEmailedAtParams) (sqlc.BookingRequest, error) {
+	return r.q.TouchScheduleEmailedAt(ctx, params)
+}
+
+func (r *repository) GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (sqlc.BookingRequest, error) {
+	return r.q.GetBookingRequestByScheduleToken(ctx, scheduleToken)
+}
+
+func (r *repository) GetClientBookingRequest(ctx context.Context, params sqlc.GetClientBookingRequestParams) (sqlc.BookingRequest, error) {
+	return r.q.GetClientBookingRequest(ctx, params)
+}
+
+func (r *repository) GetUserByEmail(ctx context.Context, email string) (sqlc.User, error) {
+	return r.q.GetUserByEmail(ctx, email)
+}
+
+func (r *repository) CreateUser(ctx context.Context, params sqlc.CreateUserParams) (sqlc.User, error) {
+	return r.q.CreateUser(ctx, params)
+}
+
+func (r *repository) SetUserMarketingOptIn(ctx context.Context, params sqlc.SetUserMarketingOptInParams) error {
+	return r.q.SetUserMarketingOptIn(ctx, params)
+}
+
+func (r *repository) LinkBookingRequestsToClient(ctx context.Context, params sqlc.LinkBookingRequestsToClientParams) error {
+	return r.q.LinkBookingRequestsToClient(ctx, params)
+}
+
+func (r *repository) CreateRefreshToken(ctx context.Context, params sqlc.CreateRefreshTokenParams) (sqlc.RefreshToken, error) {
+	return r.q.CreateRefreshToken(ctx, params)
 }
 
 func (r *repository) GetBookingStats(ctx context.Context, artistID uuid.UUID) (sqlc.GetBookingStatsRow, error) {
