@@ -68,14 +68,17 @@ type Querier interface {
 	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
 	GetArtistSettings(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
+	GetBookingMixForRange(ctx context.Context, arg GetBookingMixForRangeParams) (GetBookingMixForRangeRow, error)
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
 	GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (BookingRequest, error)
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
 	GetClientBookingRequest(ctx context.Context, arg GetClientBookingRequestParams) (BookingRequest, error)
+	GetDashboardCounts(ctx context.Context, artistID uuid.UUID) (GetDashboardCountsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	// The request's "current" appointment: a live (scheduled/proposed) one if any,
 	// otherwise the most recent overall (so cancelled ones still surface for history).
 	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
+	GetMonthlyEarnings(ctx context.Context, arg GetMonthlyEarningsParams) ([]GetMonthlyEarningsRow, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
 	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
 	GetPaymentRequestByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error)
@@ -119,6 +122,7 @@ type Querier interface {
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
 	ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListRecentPaidPaymentsForArtistRow, error)
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
+	ListUpcomingAppointments(ctx context.Context, artistID uuid.UUID) ([]ListUpcomingAppointmentsRow, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 	MarkPaymentRequestEmailed(ctx context.Context, arg MarkPaymentRequestEmailedParams) (PaymentRequest, error)
 	MarkPaymentRequestExpiredBySession(ctx context.Context, stripeCheckoutSessionID *string) (PaymentRequest, error)
