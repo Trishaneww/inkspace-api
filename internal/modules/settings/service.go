@@ -346,10 +346,15 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 			return err
 		}
 
+		goal := input.MonthlyBookingGoal
+		if goal != nil && *goal <= 0 {
+			goal = nil
+		}
 		if _, err := tx.UpdateArtistSettings(ctx, sqlc.UpdateArtistSettingsParams{
 			ArtistID:            artist.ID,
 			Timezone:            trimmedPtr(&input.Timezone),
 			DepositFlatFeeCents: input.DepositFlatFeeCents,
+			MonthlyBookingGoal:  goal,
 			Styles:              input.Styles,
 		}); err != nil {
 			return err
@@ -559,6 +564,7 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 		TermsText:                    input.TermsText,
 		Aftercare:                    input.Aftercare,
 		AcceptingBookings:            input.AcceptingBookings,
+		MonthlyBookingGoal:           input.MonthlyBookingGoal,
 		TermsShowOnBooking:           input.TermsShowOnBooking,
 		TermsShowAtDeposit:           input.TermsShowAtDeposit,
 		WaiverRequired:               input.WaiverRequired,
@@ -606,6 +612,9 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 			return ArtistSettings{}, fmt.Errorf("%w: slotIntervalMinutes must be 15, 30, or 60", ErrInvalidInput)
 		}
 		params.SlotIntervalMinutes = input.SlotIntervalMinutes
+	}
+	if input.MonthlyBookingGoal != nil && *input.MonthlyBookingGoal <= 0 {
+		return ArtistSettings{}, fmt.Errorf("%w: monthlyBookingGoal must be greater than 0", ErrInvalidInput)
 	}
 	if input.Styles != nil {
 		if !allValidStyles(*input.Styles) {

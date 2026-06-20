@@ -47,6 +47,7 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 		DepositRefundPolicy:     r.DepositRefundPolicy,
 		CancellationNoticeHours: r.CancellationNoticeHours,
 		AcceptingBookings:       r.AcceptingBookings,
+		MonthlyBookingGoal:      r.MonthlyBookingGoal,
 		Timezone:                r.Timezone,
 		SlotIntervalMinutes:     r.SlotIntervalMinutes,
 		BufferMinutes:           r.BufferMinutes,

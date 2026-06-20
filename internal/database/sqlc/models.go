@@ -121,6 +121,7 @@ type ArtistSetting struct {
 	Aftercare                  string             `json:"aftercare"`
 	Faqs                       []byte             `json:"faqs"`
 	CurrentLocationID          pgtype.UUID        `json:"current_location_id"`
+	MonthlyBookingGoal         int32              `json:"monthly_booking_goal"`
 }
 
 type BookingRequest struct {

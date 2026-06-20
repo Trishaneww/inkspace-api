@@ -63,6 +63,7 @@ type ArtistSettings struct {
 	CancellationNoticeHours *int32 `json:"cancellationNoticeHours"`
 
 	AcceptingBookings       bool   `json:"acceptingBookings"`
+	MonthlyBookingGoal      int32  `json:"monthlyBookingGoal"`
 	Timezone                string `json:"timezone"`
 	GoogleCalendarConnected bool   `json:"googleCalendarConnected"`
 	GoogleCalendarEmail     string `json:"googleCalendarEmail"`
@@ -200,6 +201,7 @@ type UpdateSettingsInput struct {
 	PlatformFeePayer    *string    `json:"platformFeePayer"`
 	DepositRefundPolicy *string    `json:"depositRefundPolicy"`
 	AcceptingBookings   *bool      `json:"acceptingBookings"`
+	MonthlyBookingGoal  *int32     `json:"monthlyBookingGoal"`
 	Timezone            *string    `json:"timezone"`
 	SlotIntervalMinutes *int32     `json:"slotIntervalMinutes"`
 	BufferMinutes       *int32     `json:"bufferMinutes"`
@@ -287,6 +289,7 @@ type OnboardingInput struct {
 
 	DepositFlatFeeCents *int64 `json:"depositFlatFeeCents"`
 	SchedulingMode      string `json:"schedulingMode" binding:"required,oneof=artist_scheduled client_scheduled"`
+	MonthlyBookingGoal  *int32 `json:"monthlyBookingGoal"`
 
 	Styles []string `json:"styles"`
 }
