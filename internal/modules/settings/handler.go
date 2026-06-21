@@ -106,6 +106,24 @@ func (h *Handler) PresignAvatar(c *gin.Context) {
 	httpx.OK(c, resp)
 }
 
+func (h *Handler) PresignOpenBookBackground(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	var input PresignUploadInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpx.Error(c, 400, "invalid_request", err.Error())
+		return
+	}
+	resp, err := h.svc.PresignOpenBookBackgroundUpload(c.Request.Context(), userID, input.ContentType)
+	if err != nil {
+		respondServiceError(c, err)
+		return
+	}
+	httpx.OK(c, resp)
+}
+
 func (h *Handler) DeleteAccount(c *gin.Context) {
 	httpx.NotImplemented(c)
 }

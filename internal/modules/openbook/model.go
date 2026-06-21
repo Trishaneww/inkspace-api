@@ -1,5 +1,7 @@
 package openbook
 
+import "encoding/json"
+
 type Profile struct {
 	Username          string               `json:"username"`
 	ArtistID          string               `json:"artistId"`
@@ -15,9 +17,29 @@ type Profile struct {
 	FAQs              []FAQItem            `json:"faqs"`
 	Availability      []AvailabilityWindow `json:"availability"`
 	Locations         []PublicLocation     `json:"locations"`
-	HasFlashes        bool                 `json:"hasFlashes"`
-	HasPortfolio      bool                 `json:"hasPortfolio"`
-	Theme             string               `json:"theme"`
+	HasFlashes         bool                 `json:"hasFlashes"`
+	HasPortfolio       bool                 `json:"hasPortfolio"`
+	Theme              string               `json:"theme"`
+	CustomTheme        *CustomTheme         `json:"customTheme,omitempty"`
+	BackgroundImageURL string               `json:"backgroundImageUrl,omitempty"`
+}
+
+type CustomTheme struct {
+	Background string `json:"background"`
+	Card       string `json:"card"`
+	Button     string `json:"button"`
+	Text       string `json:"text"`
+}
+
+func parseCustomTheme(raw []byte) *CustomTheme {
+	if len(raw) == 0 {
+		return nil
+	}
+	var ct CustomTheme
+	if err := json.Unmarshal(raw, &ct); err != nil {
+		return nil
+	}
+	return &ct
 }
 
 type PublicLocation struct {

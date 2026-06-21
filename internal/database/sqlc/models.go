@@ -191,14 +191,16 @@ type FlashPricingTier struct {
 }
 
 type OpenBook struct {
-	ID              uuid.UUID          `json:"id"`
-	ArtistID        uuid.UUID          `json:"artist_id"`
-	Slug            string             `json:"slug"`
-	SchedulingMode  string             `json:"scheduling_mode"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	CustomQuestions []byte             `json:"custom_questions"`
-	Theme           string             `json:"theme"`
+	ID                 uuid.UUID          `json:"id"`
+	ArtistID           uuid.UUID          `json:"artist_id"`
+	Slug               string             `json:"slug"`
+	SchedulingMode     string             `json:"scheduling_mode"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	CustomQuestions    []byte             `json:"custom_questions"`
+	Theme              string             `json:"theme"`
+	CustomTheme        []byte             `json:"custom_theme"`
+	BackgroundImageKey *string            `json:"background_image_key"`
 }
 
 type PaymentRequest struct {

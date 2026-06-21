@@ -14,7 +14,7 @@ import (
 const createOpenBook = `-- name: CreateOpenBook :one
 INSERT INTO open_books (artist_id, slug, scheduling_mode)
 VALUES ($1, $2, $3)
-RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme
+RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme, custom_theme, background_image_key
 `
 
 type CreateOpenBookParams struct {
@@ -35,12 +35,14 @@ func (q *Queries) CreateOpenBook(ctx context.Context, arg CreateOpenBookParams) 
 		&i.UpdatedAt,
 		&i.CustomQuestions,
 		&i.Theme,
+		&i.CustomTheme,
+		&i.BackgroundImageKey,
 	)
 	return i, err
 }
 
 const getOpenBookByArtist = `-- name: GetOpenBookByArtist :one
-SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme FROM open_books WHERE artist_id = $1
+SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme, custom_theme, background_image_key FROM open_books WHERE artist_id = $1
 `
 
 func (q *Queries) GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error) {
@@ -55,12 +57,14 @@ func (q *Queries) GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (
 		&i.UpdatedAt,
 		&i.CustomQuestions,
 		&i.Theme,
+		&i.CustomTheme,
+		&i.BackgroundImageKey,
 	)
 	return i, err
 }
 
 const getOpenBookBySlug = `-- name: GetOpenBookBySlug :one
-SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme FROM open_books WHERE slug = $1
+SELECT id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme, custom_theme, background_image_key FROM open_books WHERE slug = $1
 `
 
 func (q *Queries) GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error) {
@@ -75,27 +79,37 @@ func (q *Queries) GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook,
 		&i.UpdatedAt,
 		&i.CustomQuestions,
 		&i.Theme,
+		&i.CustomTheme,
+		&i.BackgroundImageKey,
 	)
 	return i, err
 }
 
 const updateOpenBook = `-- name: UpdateOpenBook :one
 UPDATE open_books
-SET slug             = COALESCE($1::citext, slug),
-    scheduling_mode  = COALESCE($2::text, scheduling_mode),
-    custom_questions = COALESCE($3::jsonb, custom_questions),
-    theme            = COALESCE($4::text, theme),
-    updated_at       = now()
-WHERE artist_id = $5
-RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme
+SET slug                 = COALESCE($1::citext, slug),
+    scheduling_mode      = COALESCE($2::text, scheduling_mode),
+    custom_questions     = COALESCE($3::jsonb, custom_questions),
+    theme                = COALESCE($4::text, theme),
+    custom_theme         = COALESCE($5::jsonb, custom_theme),
+    background_image_key = CASE
+        WHEN $6::boolean THEN NULL
+        ELSE COALESCE($7::text, background_image_key)
+    END,
+    updated_at           = now()
+WHERE artist_id = $8
+RETURNING id, artist_id, slug, scheduling_mode, created_at, updated_at, custom_questions, theme, custom_theme, background_image_key
 `
 
 type UpdateOpenBookParams struct {
-	Slug            *string   `json:"slug"`
-	SchedulingMode  *string   `json:"scheduling_mode"`
-	CustomQuestions []byte    `json:"custom_questions"`
-	Theme           *string   `json:"theme"`
-	ArtistID        uuid.UUID `json:"artist_id"`
+	Slug                 *string   `json:"slug"`
+	SchedulingMode       *string   `json:"scheduling_mode"`
+	CustomQuestions      []byte    `json:"custom_questions"`
+	Theme                *string   `json:"theme"`
+	CustomTheme          []byte    `json:"custom_theme"`
+	ClearBackgroundImage bool      `json:"clear_background_image"`
+	BackgroundImageKey   *string   `json:"background_image_key"`
+	ArtistID             uuid.UUID `json:"artist_id"`
 }
 
 func (q *Queries) UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) (OpenBook, error) {
@@ -104,6 +118,9 @@ func (q *Queries) UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) 
 		arg.SchedulingMode,
 		arg.CustomQuestions,
 		arg.Theme,
+		arg.CustomTheme,
+		arg.ClearBackgroundImage,
+		arg.BackgroundImageKey,
 		arg.ArtistID,
 	)
 	var i OpenBook
@@ -116,6 +133,8 @@ func (q *Queries) UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) 
 		&i.UpdatedAt,
 		&i.CustomQuestions,
 		&i.Theme,
+		&i.CustomTheme,
+		&i.BackgroundImageKey,
 	)
 	return i, err
 }

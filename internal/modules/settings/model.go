@@ -306,25 +306,40 @@ type UsernameAvailabilityResponse struct {
 }
 
 // ── Open Book ────────────────────────────────────────────────────────────────
+const ThemeCustom = "custom"
+
 var OpenBookThemes = map[string]bool{
-	"inkspace": true,
-	"noir":     true,
-	"sand":     true,
-	"sage":     true,
-	"midnight": true,
-	"navy":     true,
+	"inkspace":  true,
+	"noir":      true,
+	"sand":      true,
+	"sage":      true,
+	"midnight":  true,
+	"navy":      true,
+	ThemeCustom: true,
+}
+
+type CustomTheme struct {
+	Background string `json:"background"`
+	Card       string `json:"card"`
+	Button     string `json:"button"`
+	Text       string `json:"text"`
 }
 
 type OpenBookResponse struct {
-	Slug            string   `json:"slug"`
-	SchedulingMode  string   `json:"schedulingMode"`
-	CustomQuestions []string `json:"customQuestions"`
-	Theme           string   `json:"theme"`
+	Slug               string       `json:"slug"`
+	SchedulingMode     string       `json:"schedulingMode"`
+	CustomQuestions    []string     `json:"customQuestions"`
+	Theme              string       `json:"theme"`
+	CustomTheme        *CustomTheme `json:"customTheme,omitempty"`
+	BackgroundImageURL string       `json:"backgroundImageUrl,omitempty"`
 }
 
 type UpdateOpenBookInput struct {
-	Slug            *string   `json:"slug"`
-	SchedulingMode  *string   `json:"schedulingMode"`
-	CustomQuestions *[]string `json:"customQuestions"`
-	Theme           *string   `json:"theme"`
+	Slug                 *string      `json:"slug"`
+	SchedulingMode       *string      `json:"schedulingMode"`
+	CustomQuestions      *[]string    `json:"customQuestions"`
+	Theme                *string      `json:"theme"`
+	CustomTheme          *CustomTheme `json:"customTheme"`
+	BackgroundImageKey   *string      `json:"backgroundImageKey"`
+	ClearBackgroundImage bool         `json:"clearBackgroundImage"`
 }

@@ -29,6 +29,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 
 	artist.GET("/open-book", m.Handler.GetOpenBook)
 	artist.PATCH("/open-book", m.Handler.UpdateOpenBook)
+	artist.POST("/open-book/background/presign", m.Handler.PresignOpenBookBackground)
 
 	artist.GET("/settings", m.Handler.GetSettings)
 

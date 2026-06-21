@@ -493,12 +493,16 @@ func (s *service) buildProfile(
 		AcceptingBookings: settings.AcceptingBookings,
 		SchedulingMode:    openBook.SchedulingMode,
 		Theme:             openBook.Theme,
+		CustomTheme:       parseCustomTheme(openBook.CustomTheme),
 		Styles:            settings.Styles,
 		CustomQuestions:   parseStringList(openBook.CustomQuestions),
 		Aftercare:         settings.Aftercare,
 		FAQs:              parseFAQs(settings.Faqs),
 		Availability:      formatWindows(windows),
 		Locations:         formatPublicLocations(locations, active),
+	}
+	if openBook.BackgroundImageKey != nil && *openBook.BackgroundImageKey != "" {
+		profile.BackgroundImageURL = s.presignKey(ctx, *openBook.BackgroundImageKey)
 	}
 	if active != nil {
 		profile.Location = formatLocation(active.City, active.Country)
