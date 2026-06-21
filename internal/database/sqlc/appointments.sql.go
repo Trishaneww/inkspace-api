@@ -12,12 +12,86 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimExpiredHolds = `-- name: ClaimExpiredHolds :many
+UPDATE appointments
+SET status     = 'cancelled',
+    updated_at = now()
+WHERE status = 'awaiting_deposit'
+  AND hold_expires_at IS NOT NULL
+  AND hold_expires_at <= now()
+RETURNING id, artist_id, booking_request_id, google_calendar_event_id
+`
+
+type ClaimExpiredHoldsRow struct {
+	ID                    uuid.UUID `json:"id"`
+	ArtistID              uuid.UUID `json:"artist_id"`
+	BookingRequestID      uuid.UUID `json:"booking_request_id"`
+	GoogleCalendarEventID *string   `json:"google_calendar_event_id"`
+}
+
+func (q *Queries) ClaimExpiredHolds(ctx context.Context) ([]ClaimExpiredHoldsRow, error) {
+	rows, err := q.db.Query(ctx, claimExpiredHolds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimExpiredHoldsRow
+	for rows.Next() {
+		var i ClaimExpiredHoldsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ArtistID,
+			&i.BookingRequestID,
+			&i.GoogleCalendarEventID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const confirmHeldAppointment = `-- name: ConfirmHeldAppointment :one
+UPDATE appointments
+SET status          = 'scheduled',
+    hold_expires_at = NULL,
+    updated_at      = now()
+WHERE booking_request_id = $1 AND status = 'awaiting_deposit'
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
+`
+
+func (q *Queries) ConfirmHeldAppointment(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error) {
+	row := q.db.QueryRow(ctx, confirmHeldAppointment, bookingRequestID)
+	var i Appointment
+	err := row.Scan(
+		&i.ID,
+		&i.ArtistID,
+		&i.BookingRequestID,
+		&i.Type,
+		&i.Status,
+		&i.ScheduledStart,
+		&i.DurationMinutes,
+		&i.Format,
+		&i.SchedulingOrigin,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GoogleCalendarEventID,
+		&i.ReminderSentAt,
+		&i.HoldExpiresAt,
+	)
+	return i, err
+}
+
 const countOverlappingAppointments = `-- name: CountOverlappingAppointments :one
 SELECT COUNT(*)
 FROM appointments
 WHERE artist_id = $1
   AND scheduled_start IS NOT NULL
   AND status NOT IN ('cancelled', 'no_show')
+  AND (status <> 'awaiting_deposit' OR hold_expires_at > now())
   AND booking_request_id <> $2
   AND tstzrange(scheduled_start, scheduled_start + duration_minutes * interval '1 minute')
       && tstzrange($3::timestamptz, $4::timestamptz)
@@ -33,6 +107,7 @@ type CountOverlappingAppointmentsParams struct {
 // Counts the artist's live, time-locked appointments whose [start, start+duration)
 // window overlaps the proposed one — used to block double-booking. Proposed
 // client-scheduled slots (NULL start) and cancelled/no-show slots never conflict.
+// A non-expired deposit hold blocks the slot; an expired hold does not.
 func (q *Queries) CountOverlappingAppointments(ctx context.Context, arg CountOverlappingAppointmentsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countOverlappingAppointments,
 		arg.ArtistID,
@@ -48,12 +123,13 @@ func (q *Queries) CountOverlappingAppointments(ctx context.Context, arg CountOve
 const createAppointment = `-- name: CreateAppointment :one
 INSERT INTO appointments (
     artist_id, booking_request_id, type, status,
-    scheduled_start, duration_minutes, format, scheduling_origin
+    scheduled_start, duration_minutes, format, scheduling_origin, hold_expires_at
 ) VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7, $8
+    $5, $6, $7, $8,
+    $9
 )
-RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
 `
 
 type CreateAppointmentParams struct {
@@ -65,6 +141,7 @@ type CreateAppointmentParams struct {
 	DurationMinutes  int32              `json:"duration_minutes"`
 	Format           *string            `json:"format"`
 	SchedulingOrigin string             `json:"scheduling_origin"`
+	HoldExpiresAt    pgtype.Timestamptz `json:"hold_expires_at"`
 }
 
 func (q *Queries) CreateAppointment(ctx context.Context, arg CreateAppointmentParams) (Appointment, error) {
@@ -77,6 +154,7 @@ func (q *Queries) CreateAppointment(ctx context.Context, arg CreateAppointmentPa
 		arg.DurationMinutes,
 		arg.Format,
 		arg.SchedulingOrigin,
+		arg.HoldExpiresAt,
 	)
 	var i Appointment
 	err := row.Scan(
@@ -93,20 +171,19 @@ func (q *Queries) CreateAppointment(ctx context.Context, arg CreateAppointmentPa
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
 		&i.ReminderSentAt,
+		&i.HoldExpiresAt,
 	)
 	return i, err
 }
 
 const getLatestAppointmentByRequest = `-- name: GetLatestAppointmentByRequest :one
-SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
+SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
 FROM appointments
 WHERE booking_request_id = $1
-ORDER BY (status IN ('scheduled', 'proposed')) DESC, created_at DESC
+ORDER BY (status IN ('scheduled', 'awaiting_deposit', 'proposed')) DESC, created_at DESC
 LIMIT 1
 `
 
-// The request's "current" appointment: a live (scheduled/proposed) one if any,
-// otherwise the most recent overall (so cancelled ones still surface for history).
 func (q *Queries) GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error) {
 	row := q.db.QueryRow(ctx, getLatestAppointmentByRequest, bookingRequestID)
 	var i Appointment
@@ -124,6 +201,54 @@ func (q *Queries) GetLatestAppointmentByRequest(ctx context.Context, bookingRequ
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
 		&i.ReminderSentAt,
+		&i.HoldExpiresAt,
+	)
+	return i, err
+}
+
+const holdAppointmentSchedule = `-- name: HoldAppointmentSchedule :one
+UPDATE appointments
+SET scheduled_start  = $1::timestamptz,
+    duration_minutes = COALESCE($2::integer, duration_minutes),
+    status           = 'awaiting_deposit',
+    hold_expires_at  = $3::timestamptz,
+    updated_at       = now()
+WHERE id = $4 AND artist_id = $5
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
+`
+
+type HoldAppointmentScheduleParams struct {
+	ScheduledStart  pgtype.Timestamptz `json:"scheduled_start"`
+	DurationMinutes *int32             `json:"duration_minutes"`
+	HoldExpiresAt   pgtype.Timestamptz `json:"hold_expires_at"`
+	ID              uuid.UUID          `json:"id"`
+	ArtistID        uuid.UUID          `json:"artist_id"`
+}
+
+func (q *Queries) HoldAppointmentSchedule(ctx context.Context, arg HoldAppointmentScheduleParams) (Appointment, error) {
+	row := q.db.QueryRow(ctx, holdAppointmentSchedule,
+		arg.ScheduledStart,
+		arg.DurationMinutes,
+		arg.HoldExpiresAt,
+		arg.ID,
+		arg.ArtistID,
+	)
+	var i Appointment
+	err := row.Scan(
+		&i.ID,
+		&i.ArtistID,
+		&i.BookingRequestID,
+		&i.Type,
+		&i.Status,
+		&i.ScheduledStart,
+		&i.DurationMinutes,
+		&i.Format,
+		&i.SchedulingOrigin,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GoogleCalendarEventID,
+		&i.ReminderSentAt,
+		&i.HoldExpiresAt,
 	)
 	return i, err
 }
@@ -146,7 +271,7 @@ JOIN booking_requests br ON br.id = a.booking_request_id
 LEFT JOIN artist_locations loc ON loc.id = br.location_id
 WHERE a.artist_id = $1
   AND a.scheduled_start IS NOT NULL
-  AND a.status NOT IN ('cancelled', 'no_show')
+  AND a.status NOT IN ('cancelled', 'no_show', 'awaiting_deposit')
   AND a.scheduled_start >= $2::timestamptz
   AND a.scheduled_start <  $3::timestamptz
 ORDER BY a.scheduled_start
@@ -207,15 +332,58 @@ func (q *Queries) ListAppointmentsByArtistInRange(ctx context.Context, arg ListA
 	return items, nil
 }
 
-const listLatestAppointmentsByArtist = `-- name: ListLatestAppointmentsByArtist :many
-SELECT DISTINCT ON (booking_request_id) id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
+const listBusyAppointmentsByArtistInRange = `-- name: ListBusyAppointmentsByArtistInRange :many
+SELECT scheduled_start, duration_minutes
 FROM appointments
 WHERE artist_id = $1
-ORDER BY booking_request_id, (status IN ('scheduled', 'proposed')) DESC, created_at DESC
+  AND scheduled_start IS NOT NULL
+  AND status NOT IN ('cancelled', 'no_show')
+  AND (status <> 'awaiting_deposit' OR hold_expires_at > now())
+  AND scheduled_start >= $2::timestamptz
+  AND scheduled_start <  $3::timestamptz
+ORDER BY scheduled_start
+`
+
+type ListBusyAppointmentsByArtistInRangeParams struct {
+	ArtistID   uuid.UUID          `json:"artist_id"`
+	RangeStart pgtype.Timestamptz `json:"range_start"`
+	RangeEnd   pgtype.Timestamptz `json:"range_end"`
+}
+
+type ListBusyAppointmentsByArtistInRangeRow struct {
+	ScheduledStart  pgtype.Timestamptz `json:"scheduled_start"`
+	DurationMinutes int32              `json:"duration_minutes"`
+}
+
+func (q *Queries) ListBusyAppointmentsByArtistInRange(ctx context.Context, arg ListBusyAppointmentsByArtistInRangeParams) ([]ListBusyAppointmentsByArtistInRangeRow, error) {
+	rows, err := q.db.Query(ctx, listBusyAppointmentsByArtistInRange, arg.ArtistID, arg.RangeStart, arg.RangeEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBusyAppointmentsByArtistInRangeRow
+	for rows.Next() {
+		var i ListBusyAppointmentsByArtistInRangeRow
+		if err := rows.Scan(&i.ScheduledStart, &i.DurationMinutes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestAppointmentsByArtist = `-- name: ListLatestAppointmentsByArtist :many
+SELECT DISTINCT ON (booking_request_id) id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
+FROM appointments
+WHERE artist_id = $1
+ORDER BY booking_request_id, (status IN ('scheduled', 'awaiting_deposit', 'proposed')) DESC, created_at DESC
 `
 
 // The current appointment per request (live if any, else most recent), so the
-// inbox list can show the scheduled/proposed state without an N+1 lookup.
+// inbox list can show the scheduled/held/proposed state without an N+1 lookup.
 func (q *Queries) ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]Appointment, error) {
 	rows, err := q.db.Query(ctx, listLatestAppointmentsByArtist, artistID)
 	if err != nil {
@@ -239,6 +407,7 @@ func (q *Queries) ListLatestAppointmentsByArtist(ctx context.Context, artistID u
 			&i.UpdatedAt,
 			&i.GoogleCalendarEventID,
 			&i.ReminderSentAt,
+			&i.HoldExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -251,9 +420,9 @@ func (q *Queries) ListLatestAppointmentsByArtist(ctx context.Context, artistID u
 }
 
 const listLiveAppointmentsByRequest = `-- name: ListLiveAppointmentsByRequest :many
-SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
+SELECT id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
 FROM appointments
-WHERE booking_request_id = $1 AND status IN ('scheduled', 'proposed')
+WHERE booking_request_id = $1 AND status IN ('scheduled', 'awaiting_deposit', 'proposed')
 ORDER BY created_at
 `
 
@@ -280,6 +449,7 @@ func (q *Queries) ListLiveAppointmentsByRequest(ctx context.Context, bookingRequ
 			&i.UpdatedAt,
 			&i.GoogleCalendarEventID,
 			&i.ReminderSentAt,
+			&i.HoldExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -316,7 +486,7 @@ SET scheduled_start  = $1::timestamptz,
     status           = 'scheduled',
     updated_at       = now()
 WHERE id = $4 AND artist_id = $5
-RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
 `
 
 type UpdateAppointmentScheduleParams struct {
@@ -350,6 +520,7 @@ func (q *Queries) UpdateAppointmentSchedule(ctx context.Context, arg UpdateAppoi
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
 		&i.ReminderSentAt,
+		&i.HoldExpiresAt,
 	)
 	return i, err
 }
@@ -359,7 +530,7 @@ UPDATE appointments
 SET status     = $1,
     updated_at = now()
 WHERE id = $2 AND artist_id = $3
-RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at
+RETURNING id, artist_id, booking_request_id, type, status, scheduled_start, duration_minutes, format, scheduling_origin, created_at, updated_at, google_calendar_event_id, reminder_sent_at, hold_expires_at
 `
 
 type UpdateAppointmentStatusParams struct {
@@ -385,6 +556,7 @@ func (q *Queries) UpdateAppointmentStatus(ctx context.Context, arg UpdateAppoint
 		&i.UpdatedAt,
 		&i.GoogleCalendarEventID,
 		&i.ReminderSentAt,
+		&i.HoldExpiresAt,
 	)
 	return i, err
 }

@@ -56,6 +56,31 @@ func (s *service) sendPaymentReceiptEmail(row sqlc.PaymentRequest, artistName st
 	})
 }
 
+type depositPaidEmailPayload struct {
+	To              string `json:"to"`
+	ArtistName      string `json:"artistName"`
+	ClientName      string `json:"clientName"`
+	AmountCents     int64  `json:"amountCents"`
+	Currency        string `json:"currency"`
+	WhenLabel       string `json:"whenLabel"`
+	DurationMinutes int32  `json:"durationMinutes"`
+}
+
+func (s *service) sendDepositPaidEmail(row sqlc.PaymentRequest, confirmation DepositConfirmation) {
+	if confirmation.ArtistEmail == "" {
+		return
+	}
+	s.postInternalEmail("/api/internal/emails/deposit-paid", depositPaidEmailPayload{
+		To:              confirmation.ArtistEmail,
+		ArtistName:      confirmation.ArtistName,
+		ClientName:      confirmation.ClientName,
+		AmountCents:     row.AmountCents,
+		Currency:        row.Currency,
+		WhenLabel:       confirmation.WhenLabel,
+		DurationMinutes: confirmation.DurationMinutes,
+	})
+}
+
 func (s *service) postInternalEmail(path string, payload any) {
 	s.email.Post(path, payload)
 }

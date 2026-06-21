@@ -69,6 +69,32 @@ func (s *service) sendBookingRequestEmail(row sqlc.BookingRequest, artistName st
 	})
 }
 
+type depositRequestEmailPayload struct {
+	To          string `json:"to"`
+	ClientName  string `json:"clientName"`
+	ArtistName  string `json:"artistName"`
+	AmountCents int64  `json:"amountCents"`
+	Currency    string `json:"currency"`
+	WhenLabel   string `json:"whenLabel"`
+	PayURL      string `json:"payUrl"`
+}
+
+func (s *service) sendDepositRequestEmail(inquiry Inquiry, artistName, token string, depositCents int64, currency, whenLabel string) {
+	s.postInternalEmail("/api/internal/emails/deposit-request", depositRequestEmailPayload{
+		To:          inquiry.ClientEmail,
+		ClientName:  inquiry.ClientName,
+		ArtistName:  artistName,
+		AmountCents: depositCents,
+		Currency:    currency,
+		WhenLabel:   whenLabel,
+		PayURL:      s.payLinkURL(token),
+	})
+}
+
+func (s *service) payLinkURL(token string) string {
+	return s.cfg.FrontendURL + "/pay/" + token
+}
+
 func (s *service) scheduleLinkURL(token string) string {
 	return s.cfg.FrontendURL + "/book/" + token
 }

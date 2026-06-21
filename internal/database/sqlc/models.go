@@ -25,6 +25,7 @@ type Appointment struct {
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	GoogleCalendarEventID *string            `json:"google_calendar_event_id"`
 	ReminderSentAt        pgtype.Timestamptz `json:"reminder_sent_at"`
+	HoldExpiresAt         pgtype.Timestamptz `json:"hold_expires_at"`
 }
 
 type Artist struct {
@@ -153,6 +154,7 @@ type BookingRequest struct {
 	FlashSizeCode          string             `json:"flash_size_code"`
 	ScheduleToken          *string            `json:"schedule_token"`
 	ScheduleEmailedAt      pgtype.Timestamptz `json:"schedule_emailed_at"`
+	DepositAmountCents     *int64             `json:"deposit_amount_cents"`
 }
 
 type Flash struct {
@@ -224,6 +226,7 @@ type PaymentRequest struct {
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	LastEmailedAt           pgtype.Timestamptz `json:"last_emailed_at"`
 	ReminderSentAt          pgtype.Timestamptz `json:"reminder_sent_at"`
+	ScheduledStart          pgtype.Timestamptz `json:"scheduled_start"`
 }
 
 type PhoneVerification struct {
