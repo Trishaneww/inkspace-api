@@ -46,6 +46,7 @@ type Service interface {
 	ResendPaymentRequest(ctx context.Context, userID, paymentRequestID uuid.UUID) (PaymentRequest, error)
 	RefundPaymentRequest(ctx context.Context, userID, paymentRequestID uuid.UUID) (PaymentRequest, error)
 	GetEarnings(ctx context.Context, userID uuid.UUID) (Earnings, error)
+	ListPayouts(ctx context.Context, userID uuid.UUID) ([]Payout, error)
 
 	GetPublicPaymentRequest(ctx context.Context, token string) (PublicPaymentRequest, error)
 	CreateCheckout(ctx context.Context, token string) (CheckoutResponse, error)
@@ -534,6 +535,36 @@ func (s *service) GetEarnings(ctx context.Context, userID uuid.UUID) (Earnings, 
 		ThisMonth:      earningsTotals(totals.MonthCollectedCents, totals.MonthFeeCents, totals.MonthPaidCount),
 		RecentPayments: recent,
 	}, nil
+}
+
+func (s *service) ListPayouts(ctx context.Context, userID uuid.UUID) ([]Payout, error) {
+	artist, err := s.repo.GetArtistByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	settings, err := s.repo.GetArtistSettings(ctx, artist.ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []Payout{}, nil
+		}
+		return nil, err
+	}
+	if s.cfg.StripeSecretKey == "" ||
+		settings.StripeAccountID == nil || *settings.StripeAccountID == "" {
+		return []Payout{}, nil
+	}
+
+	raw, err := s.listStripePayouts(ctx, *settings.StripeAccountID)
+	if err != nil {
+		return nil, err
+	}
+
+	payouts := make([]Payout, 0, len(raw))
+	for _, p := range raw {
+		payouts = append(payouts, payoutFromStripe(p))
+	}
+	return payouts, nil
 }
 
 func (s *service) artistDisplayName(ctx context.Context, artistID uuid.UUID) string {

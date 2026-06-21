@@ -7,9 +7,29 @@ import (
 
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/checkout/session"
+	"github.com/stripe/stripe-go/v82/payout"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 )
+
+func (s *service) listStripePayouts(ctx context.Context, artistAccountID string) ([]*stripe.Payout, error) {
+	params := &stripe.PayoutListParams{}
+	params.Context = ctx
+	params.Limit = stripe.Int64(50)
+	params.SetStripeAccount(artistAccountID)
+	params.AddExpand("data.destination")
+
+	iter := payout.List(params)
+	payouts := make([]*stripe.Payout, 0)
+	for iter.Next() {
+		payouts = append(payouts, iter.Payout())
+	}
+	if err := iter.Err(); err != nil {
+		s.log.Warn("stripe_payouts_list_failed", "account_id", artistAccountID, "error", err)
+		return nil, ErrStripeAPI
+	}
+	return payouts, nil
+}
 
 func (s *service) createCheckoutSession(ctx context.Context, pr sqlc.PaymentRequest, artistAccountID string) (*stripe.CheckoutSession, error) {
 	productName := "Tattoo deposit"

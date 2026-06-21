@@ -110,6 +110,19 @@ func (h *Handler) GetEarnings(c *gin.Context) {
 	httpx.OK(c, earnings)
 }
 
+func (h *Handler) GetPayouts(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	payouts, err := h.svc.ListPayouts(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, payouts)
+}
+
 func (h *Handler) GetPaymentRequest(c *gin.Context) {
 	pr, err := h.svc.GetPublicPaymentRequest(c.Request.Context(), c.Param("token"))
 	if err != nil {

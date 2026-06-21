@@ -19,6 +19,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	artist.Use(middleware.RequireAuth(m.cfg.JWTSecret))
 	artist.Use(middleware.RequireRole(string(auth.RoleArtist)))
 	artist.GET("/earnings", m.Handler.GetEarnings)
+	artist.GET("/payouts", m.Handler.GetPayouts)
 	artist.POST("/bookings/:id/payment-requests", m.Handler.CreatePaymentRequest)
 	artist.POST("/payment-requests/:id/cancel", m.Handler.CancelPaymentRequest)
 	artist.POST("/payment-requests/:id/resend", m.Handler.ResendPaymentRequest)

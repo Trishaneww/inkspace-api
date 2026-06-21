@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stripe/stripe-go/v82"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
@@ -132,6 +133,58 @@ func recentPaymentFromRow(row sqlc.ListRecentPaidPaymentsForArtistRow) RecentPay
 
 func invoiceReference(id uuid.UUID) string {
 	return "INV-" + strings.ToUpper(strings.ReplaceAll(id.String(), "-", "")[:8])
+}
+
+type Payout struct {
+	ID          string `json:"id"`
+	Reference   string `json:"reference"`
+	Currency    string `json:"currency"`
+	AmountCents int64  `json:"amountCents"`
+	Status      string `json:"status"`
+	BankLast4   string `json:"bankLast4"`
+	InitiatedAt string `json:"initiatedAt"`
+	ArrivalAt   string `json:"arrivalAt"`
+}
+
+func payoutFromStripe(p *stripe.Payout) Payout {
+	return Payout{
+		ID:          p.ID,
+		Reference:   payoutReference(p.ID),
+		Currency:    strings.ToUpper(string(p.Currency)),
+		AmountCents: p.Amount,
+		Status:      string(p.Status),
+		BankLast4:   payoutBankLast4(p),
+		InitiatedAt: formatUnixSeconds(p.Created),
+		ArrivalAt:   formatUnixSeconds(p.ArrivalDate),
+	}
+}
+
+func payoutBankLast4(p *stripe.Payout) string {
+	if p.Destination == nil {
+		return ""
+	}
+	if p.Destination.BankAccount != nil {
+		return p.Destination.BankAccount.Last4
+	}
+	if p.Destination.Card != nil {
+		return p.Destination.Card.Last4
+	}
+	return ""
+}
+
+func payoutReference(id string) string {
+	cleaned := strings.ToUpper(strings.ReplaceAll(strings.TrimPrefix(id, "po_"), "_", ""))
+	if len(cleaned) > 8 {
+		cleaned = cleaned[:8]
+	}
+	return "PO-" + cleaned
+}
+
+func formatUnixSeconds(seconds int64) string {
+	if seconds == 0 {
+		return ""
+	}
+	return time.Unix(seconds, 0).UTC().Format(time.RFC3339)
 }
 
 func paymentRequestFromRow(row sqlc.PaymentRequest, payURL string) PaymentRequest {
