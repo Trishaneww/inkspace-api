@@ -35,7 +35,15 @@ CREATE TABLE booking_requests (
     custom_answers  JSONB   NOT NULL DEFAULT '[]',
     color_type      TEXT    NOT NULL DEFAULT '',
     location_id     UUID    REFERENCES artist_locations (id) ON DELETE SET NULL,
-    flash_size_code TEXT    NOT NULL DEFAULT ''
+    flash_size_code TEXT    NOT NULL DEFAULT '',
+
+    -- Magic-link token + send time for client self-scheduling.
+    schedule_token      TEXT UNIQUE,
+    schedule_emailed_at TIMESTAMPTZ,
+
+    -- Deposit to secure the session, decided per booking (NULL/0 = none).
+    deposit_amount_cents BIGINT
+        CHECK (deposit_amount_cents IS NULL OR deposit_amount_cents >= 0)
 );
 
 CREATE INDEX idx_booking_requests_artist_status
