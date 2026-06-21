@@ -20,18 +20,21 @@ type Querier interface {
 	CancelPaymentRequest(ctx context.Context, arg CancelPaymentRequestParams) (PaymentRequest, error)
 	ClaimDuePaymentReminders(ctx context.Context, cutoff pgtype.Timestamptz) ([]ClaimDuePaymentRemindersRow, error)
 	ClaimDueSessionReminders(ctx context.Context, windowEnd pgtype.Timestamptz) ([]ClaimDueSessionRemindersRow, error)
+	ClaimExpiredHolds(ctx context.Context) ([]ClaimExpiredHoldsRow, error)
 	ClaimFlash(ctx context.Context, arg ClaimFlashParams) (Flash, error)
 	ClearGoogleCalendarConnection(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	ClearStripeAccount(ctx context.Context, artistID uuid.UUID) (ArtistSetting, error)
 	// Soft-delete a guest spot: mark it closed but keep the row so booking
 	// requests retain their location. The home studio can't be closed.
 	CloseArtistLocation(ctx context.Context, arg CloseArtistLocationParams) error
+	ConfirmHeldAppointment(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
 	ConsumePhoneVerification(ctx context.Context, id uuid.UUID) error
 	CountFlashesByArtist(ctx context.Context, arg CountFlashesByArtistParams) (CountFlashesByArtistRow, error)
 	CountLivePaymentRequests(ctx context.Context, arg CountLivePaymentRequestsParams) (int64, error)
 	// Counts the artist's live, time-locked appointments whose [start, start+duration)
 	// window overlaps the proposed one — used to block double-booking. Proposed
 	// client-scheduled slots (NULL start) and cancelled/no-show slots never conflict.
+	// A non-expired deposit hold blocks the slot; an expired hold does not.
 	CountOverlappingAppointments(ctx context.Context, arg CountOverlappingAppointmentsParams) (int64, error)
 	CountPortfolioItemsByArtist(ctx context.Context, arg CountPortfolioItemsByArtistParams) (CountPortfolioItemsByArtistRow, error)
 	CreateAppointment(ctx context.Context, arg CreateAppointmentParams) (Appointment, error)
@@ -58,6 +61,7 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	EnsureArtist(ctx context.Context, userID uuid.UUID) error
 	EnsureArtistSettings(ctx context.Context, artistID uuid.UUID) error
+	ExpireDepositRequestsForBooking(ctx context.Context, bookingRequestID uuid.UUID) error
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error)
@@ -75,8 +79,6 @@ type Querier interface {
 	GetClientBookingRequest(ctx context.Context, arg GetClientBookingRequestParams) (BookingRequest, error)
 	GetDashboardCounts(ctx context.Context, artistID uuid.UUID) (GetDashboardCountsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
-	// The request's "current" appointment: a live (scheduled/proposed) one if any,
-	// otherwise the most recent overall (so cancelled ones still surface for history).
 	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
 	GetMonthlyEarnings(ctx context.Context, arg GetMonthlyEarningsParams) ([]GetMonthlyEarningsRow, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
@@ -90,6 +92,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByPhone(ctx context.Context, phone string) (User, error)
 	GetUserByUsername(ctx context.Context, username *string) (User, error)
+	HoldAppointmentSchedule(ctx context.Context, arg HoldAppointmentScheduleParams) (Appointment, error)
 	IncrementFlashViewCount(ctx context.Context, id uuid.UUID) error
 	IncrementPhoneVerificationAttempts(ctx context.Context, id uuid.UUID) error
 	LinkBookingRequestsToClient(ctx context.Context, arg LinkBookingRequestsToClientParams) error
@@ -107,6 +110,7 @@ type Querier interface {
 	ListBlocklist(ctx context.Context, artistID uuid.UUID) ([]ArtistBlocklist, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error)
 	ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]BookingRequest, error)
+	ListBusyAppointmentsByArtistInRange(ctx context.Context, arg ListBusyAppointmentsByArtistInRangeParams) ([]ListBusyAppointmentsByArtistInRangeRow, error)
 	ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]ArtistDaysOff, error)
 	ListFlashPricingTiers(ctx context.Context, flashID uuid.UUID) ([]FlashPricingTier, error)
 	// Batched fetch for a page of flashes, avoiding an N+1 of ListFlashPricingTiers.
@@ -114,7 +118,7 @@ type Querier interface {
 	ListFlashPricingTiersForFlashes(ctx context.Context, flashIds []uuid.UUID) ([]FlashPricingTier, error)
 	ListFlashesByArtist(ctx context.Context, arg ListFlashesByArtistParams) ([]Flash, error)
 	// The current appointment per request (live if any, else most recent), so the
-	// inbox list can show the scheduled/proposed state without an N+1 lookup.
+	// inbox list can show the scheduled/held/proposed state without an N+1 lookup.
 	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]Appointment, error)
 	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]Appointment, error)
 	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]PaymentRequest, error)
@@ -143,12 +147,15 @@ type Querier interface {
 	SeedMarkPaymentPaid(ctx context.Context, arg SeedMarkPaymentPaidParams) error
 	SetAppointmentCalendarEvent(ctx context.Context, arg SetAppointmentCalendarEventParams) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
+	SetBookingDepositAmount(ctx context.Context, arg SetBookingDepositAmountParams) error
 	SetBookingDepositStatus(ctx context.Context, arg SetBookingDepositStatusParams) error
 	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
+	SetDepositScheduledStart(ctx context.Context, arg SetDepositScheduledStartParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
 	SetScheduleToken(ctx context.Context, arg SetScheduleTokenParams) (BookingRequest, error)
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
 	SetUserMarketingOptIn(ctx context.Context, arg SetUserMarketingOptInParams) error
+	SumPaidDepositsForBooking(ctx context.Context, bookingRequestID uuid.UUID) (int64, error)
 	TouchScheduleEmailedAt(ctx context.Context, arg TouchScheduleEmailedAtParams) (BookingRequest, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)

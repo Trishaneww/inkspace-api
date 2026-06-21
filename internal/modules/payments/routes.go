@@ -12,8 +12,11 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 
 	pay := rg.Group("/pay")
 	pay.GET("/:token", m.Handler.GetPaymentRequest)
-	pay.POST("/:token/checkout", m.Handler.CreateCheckout)
-	pay.POST("/:token/account", m.Handler.CreateClientAccount)
+
+	client := rg.Group("/current-user/payments")
+	client.Use(middleware.RequireAuth(m.cfg.JWTSecret))
+	client.Use(middleware.RequireRole(string(auth.RoleUser)))
+	client.POST("/:token/checkout", m.Handler.CreateClientCheckout)
 
 	artist := rg.Group("/current-user")
 	artist.Use(middleware.RequireAuth(m.cfg.JWTSecret))

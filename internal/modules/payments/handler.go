@@ -132,27 +132,17 @@ func (h *Handler) GetPaymentRequest(c *gin.Context) {
 	httpx.OK(c, pr)
 }
 
-func (h *Handler) CreateCheckout(c *gin.Context) {
-	resp, err := h.svc.CreateCheckout(c.Request.Context(), c.Param("token"))
+func (h *Handler) CreateClientCheckout(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.CreateClientCheckout(c.Request.Context(), userID, c.Param("token"))
 	if err != nil {
 		respondError(c, err)
 		return
 	}
 	httpx.OK(c, resp)
-}
-
-func (h *Handler) CreateClientAccount(c *gin.Context) {
-	var input CreateClientAccountInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		httpx.Error(c, http.StatusBadRequest, "invalid_input", "invalid request body")
-		return
-	}
-	session, err := h.svc.CreateClientAccount(c.Request.Context(), c.Param("token"), input)
-	if err != nil {
-		respondError(c, err)
-		return
-	}
-	httpx.Created(c, session)
 }
 
 func (h *Handler) Webhook(c *gin.Context) {

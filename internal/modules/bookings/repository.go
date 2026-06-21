@@ -50,7 +50,10 @@ type Repository interface {
 	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.Appointment, error)
 	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.Appointment, error)
 	ListAppointmentsByArtistInRange(ctx context.Context, params sqlc.ListAppointmentsByArtistInRangeParams) ([]sqlc.ListAppointmentsByArtistInRangeRow, error)
+	ListBusyAppointmentsByArtistInRange(ctx context.Context, params sqlc.ListBusyAppointmentsByArtistInRangeParams) ([]sqlc.ListBusyAppointmentsByArtistInRangeRow, error)
 	UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error)
+	HoldAppointmentSchedule(ctx context.Context, params sqlc.HoldAppointmentScheduleParams) (sqlc.Appointment, error)
+	ConfirmHeldAppointment(ctx context.Context, bookingRequestID uuid.UUID) (sqlc.Appointment, error)
 	UpdateAppointmentStatus(ctx context.Context, params sqlc.UpdateAppointmentStatusParams) (sqlc.Appointment, error)
 	SetAppointmentCalendarEvent(ctx context.Context, params sqlc.SetAppointmentCalendarEventParams) error
 	CountOverlappingAppointments(ctx context.Context, params sqlc.CountOverlappingAppointmentsParams) (int64, error)
@@ -58,6 +61,7 @@ type Repository interface {
 	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.PaymentRequest, error)
 	ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]sqlc.PaymentRequest, error)
 	CreatePaymentRequest(ctx context.Context, params sqlc.CreatePaymentRequestParams) (sqlc.PaymentRequest, error)
+	SetBookingDepositAmount(ctx context.Context, params sqlc.SetBookingDepositAmountParams) error
 	SeedMarkPaymentPaid(ctx context.Context, params sqlc.SeedMarkPaymentPaidParams) error
 }
 
@@ -190,8 +194,20 @@ func (r *repository) ListAppointmentsByArtistInRange(ctx context.Context, params
 	return r.q.ListAppointmentsByArtistInRange(ctx, params)
 }
 
+func (r *repository) ListBusyAppointmentsByArtistInRange(ctx context.Context, params sqlc.ListBusyAppointmentsByArtistInRangeParams) ([]sqlc.ListBusyAppointmentsByArtistInRangeRow, error) {
+	return r.q.ListBusyAppointmentsByArtistInRange(ctx, params)
+}
+
 func (r *repository) UpdateAppointmentSchedule(ctx context.Context, params sqlc.UpdateAppointmentScheduleParams) (sqlc.Appointment, error) {
 	return r.q.UpdateAppointmentSchedule(ctx, params)
+}
+
+func (r *repository) HoldAppointmentSchedule(ctx context.Context, params sqlc.HoldAppointmentScheduleParams) (sqlc.Appointment, error) {
+	return r.q.HoldAppointmentSchedule(ctx, params)
+}
+
+func (r *repository) ConfirmHeldAppointment(ctx context.Context, bookingRequestID uuid.UUID) (sqlc.Appointment, error) {
+	return r.q.ConfirmHeldAppointment(ctx, bookingRequestID)
 }
 
 func (r *repository) UpdateAppointmentStatus(ctx context.Context, params sqlc.UpdateAppointmentStatusParams) (sqlc.Appointment, error) {
@@ -228,6 +244,10 @@ func (r *repository) ListPaymentRequestsByBooking(ctx context.Context, bookingRe
 
 func (r *repository) CreatePaymentRequest(ctx context.Context, params sqlc.CreatePaymentRequestParams) (sqlc.PaymentRequest, error) {
 	return r.q.CreatePaymentRequest(ctx, params)
+}
+
+func (r *repository) SetBookingDepositAmount(ctx context.Context, params sqlc.SetBookingDepositAmountParams) error {
+	return r.q.SetBookingDepositAmount(ctx, params)
 }
 
 func (r *repository) SeedMarkPaymentPaid(ctx context.Context, params sqlc.SeedMarkPaymentPaidParams) error {

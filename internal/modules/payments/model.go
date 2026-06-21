@@ -38,6 +38,9 @@ type PaymentRequest struct {
 	ExpiresAt         string  `json:"expiresAt"`
 	PaidAt            *string `json:"paidAt,omitempty"`
 	CreatedAt         string  `json:"createdAt"`
+
+	JobTotalCents       int64 `json:"jobTotalCents"`
+	DepositAppliedCents int64 `json:"depositAppliedCents"`
 }
 
 type CreatePaymentRequestInput struct {

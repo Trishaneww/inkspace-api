@@ -17,7 +17,6 @@ import (
 	"github.com/stripe/stripe-go/v82/refund"
 	"github.com/stripe/stripe-go/v82/webhook"
 
-	"github.com/trishaneupnexx/inkspace-api/internal/clientaccount"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/email"
@@ -49,17 +48,25 @@ type Service interface {
 	ListPayouts(ctx context.Context, userID uuid.UUID) ([]Payout, error)
 
 	GetPublicPaymentRequest(ctx context.Context, token string) (PublicPaymentRequest, error)
-	CreateCheckout(ctx context.Context, token string) (CheckoutResponse, error)
-	CreateClientAccount(ctx context.Context, token string, input CreateClientAccountInput) (ClientSession, error)
+	CreateClientCheckout(ctx context.Context, userID uuid.UUID, token string) (CheckoutResponse, error)
+
+	// CreateDepositRequest is called by the bookings module when a session is
+	// scheduled with a deposit. Satisfies bookings.DepositRequester.
+	CreateDepositRequest(ctx context.Context, artistID, bookingID uuid.UUID, amountCents int64, scheduledStart *time.Time) (string, error)
+	// SetDepositScheduledStart updates a live deposit's chosen time (client re-pick).
+	SetDepositScheduledStart(ctx context.Context, bookingID uuid.UUID, scheduledStart time.Time) error
+	// SetDepositConfirmer injects the bookings-side confirmer (wired in main).
+	SetDepositConfirmer(confirmer DepositConfirmer)
 
 	ProcessWebhook(ctx context.Context, payload []byte, signature string) error
 }
 
 type service struct {
-	cfg   *config.Config
-	repo  Repository
-	log   *slog.Logger
-	email *email.Client
+	cfg              *config.Config
+	repo             Repository
+	log              *slog.Logger
+	email            *email.Client
+	depositConfirmer DepositConfirmer
 }
 
 func NewService(cfg *config.Config, repo Repository) Service {
@@ -72,8 +79,19 @@ func NewService(cfg *config.Config, repo Repository) Service {
 	}
 }
 
+func (s *service) SetDepositConfirmer(confirmer DepositConfirmer) {
+	s.depositConfirmer = confirmer
+}
+
+// CreatePaymentRequest issues the standalone full ("final") payment. The artist
+// enters the job total; any deposit already paid on the booking is subtracted so
+// the client is only charged the remaining balance. Deposits are no longer
+// created here — they ride along with scheduling (see CreateDepositRequest).
 func (s *service) CreatePaymentRequest(ctx context.Context, userID, bookingID uuid.UUID, input CreatePaymentRequestInput) (PaymentRequest, error) {
-	if input.Type != typeDeposit && input.Type != typeFinal {
+	if input.Type != typeFinal {
+		return PaymentRequest{}, ErrInvalidInput
+	}
+	if input.AmountCents == nil {
 		return PaymentRequest{}, ErrInvalidInput
 	}
 
@@ -99,25 +117,20 @@ func (s *service) CreatePaymentRequest(ctx context.Context, userID, bookingID uu
 		return PaymentRequest{}, err
 	}
 
-	var amount int64
-	switch {
-	case input.AmountCents != nil:
-		amount = *input.AmountCents
-	case input.Type == typeDeposit && settings.DepositFlatFeeCents != nil:
-		amount = *settings.DepositFlatFeeCents
-	case input.Type == typeDeposit:
-		return PaymentRequest{}, ErrNoDepositDefault
-	default:
-		return PaymentRequest{}, ErrInvalidInput
+	jobTotal := *input.AmountCents
+	depositPaid, err := s.repo.SumPaidDepositsForBooking(ctx, bookingID)
+	if err != nil {
+		return PaymentRequest{}, err
 	}
-	if amount < MinChargeCents {
+	net := jobTotal - depositPaid
+	if net < MinChargeCents {
 		return PaymentRequest{}, ErrAmountTooLow
 	}
 
-	// A second outstanding request of the same type on one booking is not allowed.
+	// A second outstanding final request on one booking is not allowed.
 	live, err := s.repo.CountLivePaymentRequests(ctx, sqlc.CountLivePaymentRequestsParams{
 		BookingRequestID: bookingID,
-		Type:             input.Type,
+		Type:             typeFinal,
 	})
 	if err != nil {
 		return PaymentRequest{}, err
@@ -126,7 +139,7 @@ func (s *service) CreatePaymentRequest(ctx context.Context, userID, bookingID uu
 		return PaymentRequest{}, ErrAlreadyRequested
 	}
 
-	fee := computeFee(amount, settings.PlatformFeePayer)
+	fee := computeFee(net, settings.PlatformFeePayer)
 	token, err := newPublicToken()
 	if err != nil {
 		return PaymentRequest{}, err
@@ -135,7 +148,7 @@ func (s *service) CreatePaymentRequest(ctx context.Context, userID, bookingID uu
 	row, err := s.repo.CreatePaymentRequest(ctx, sqlc.CreatePaymentRequestParams{
 		ArtistID:          artist.ID,
 		BookingRequestID:  bookingID,
-		Type:              input.Type,
+		Type:              typeFinal,
 		Currency:          settings.Currency,
 		AmountCents:       fee.AmountCents,
 		PlatformFeeCents:  fee.PlatformFeeCents,
@@ -151,15 +164,11 @@ func (s *service) CreatePaymentRequest(ctx context.Context, userID, bookingID uu
 		return PaymentRequest{}, err
 	}
 
-	if input.Type == typeDeposit {
-		_ = s.repo.SetBookingDepositStatus(ctx, sqlc.SetBookingDepositStatusParams{
-			DepositStatus:    "pending",
-			BookingRequestID: bookingID,
-		})
-	}
-
 	s.sendPaymentRequestEmail(row, s.artistDisplayName(ctx, artist.ID))
-	return paymentRequestFromRow(row, s.payLinkURL(row.PublicToken)), nil
+	out := paymentRequestFromRow(row, s.payLinkURL(row.PublicToken))
+	out.JobTotalCents = jobTotal
+	out.DepositAppliedCents = depositPaid
+	return out, nil
 }
 
 func (s *service) CancelPaymentRequest(ctx context.Context, userID, paymentRequestID uuid.UUID) (PaymentRequest, error) {
@@ -292,48 +301,27 @@ func (s *service) GetPublicPaymentRequest(ctx context.Context, token string) (Pu
 	}, nil
 }
 
-func (s *service) CreateClientAccount(ctx context.Context, token string, input CreateClientAccountInput) (ClientSession, error) {
-	row, err := s.repo.GetPaymentRequestByToken(ctx, token)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ClientSession{}, ErrNotFound
-		}
-		return ClientSession{}, err
-	}
-
-	session, err := clientaccount.Create(ctx, s.repo, s.cfg, row.ClientEmail, clientaccount.Input{
-		FirstName:      input.FirstName,
-		LastName:       input.LastName,
-		Phone:          input.Phone,
-		Password:       input.Password,
-		MarketingOptIn: input.MarketingOptIn,
-	}, "pay_page")
-	switch {
-	case errors.Is(err, clientaccount.ErrWeakPassword):
-		return ClientSession{}, ErrWeakPassword
-	case errors.Is(err, clientaccount.ErrAccountExists):
-		return ClientSession{}, ErrAccountExists
-	case errors.Is(err, clientaccount.ErrPhoneRequired):
-		return ClientSession{}, ErrPhoneRequired
-	case errors.Is(err, clientaccount.ErrPhoneTaken):
-		return ClientSession{}, ErrPhoneTaken
-	case err != nil:
-		return ClientSession{}, err
-	}
-	return session, nil
-}
-
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-func (s *service) CreateCheckout(ctx context.Context, token string) (CheckoutResponse, error) {
+// CreateClientCheckout starts a Stripe checkout for a payment the signed-in
+// client owns (matched by email). Account-first replacement for the old public
+// guest checkout.
+func (s *service) CreateClientCheckout(ctx context.Context, userID uuid.UUID, token string) (CheckoutResponse, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return CheckoutResponse{}, err
+	}
 	row, err := s.repo.GetPaymentRequestByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return CheckoutResponse{}, ErrNotFound
 		}
 		return CheckoutResponse{}, err
+	}
+	if !strings.EqualFold(strings.TrimSpace(row.ClientEmail), strings.TrimSpace(user.Email)) {
+		return CheckoutResponse{}, ErrNotFound
 	}
 	if row.Status != "requested" && row.Status != "processing" {
 		return CheckoutResponse{}, ErrNotPayable
@@ -491,6 +479,20 @@ func (s *service) onPaymentPaid(ctx context.Context, row sqlc.PaymentRequest) {
 			DepositStatus:    "paid",
 			BookingRequestID: row.BookingRequestID,
 		})
+
+		var chosenStart *time.Time
+		if row.ScheduledStart.Valid {
+			t := row.ScheduledStart.Time
+			chosenStart = &t
+		}
+		if s.depositConfirmer != nil {
+			confirmation, err := s.depositConfirmer.ConfirmDepositPaid(ctx, row.BookingRequestID, chosenStart)
+			if err != nil {
+				s.log.Warn("deposit_confirm_failed", "booking_request_id", row.BookingRequestID, "error", err)
+			} else if confirmation.Confirmed {
+				s.sendDepositPaidEmail(row, confirmation)
+			}
+		}
 	}
 	s.sendPaymentReceiptEmail(row, s.artistDisplayName(ctx, row.ArtistID))
 }

@@ -43,8 +43,8 @@ func (s *service) createCheckoutSession(ctx context.Context, pr sqlc.PaymentRequ
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:          stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:    stripe.String(s.payPageURL(pr.PublicToken, "success")),
-		CancelURL:     stripe.String(s.payPageURL(pr.PublicToken, "cancel")),
+		SuccessURL:    stripe.String(s.clientReturnURL("success")),
+		CancelURL:     stripe.String(s.clientReturnURL("cancel")),
 		CustomerEmail: stripe.String(pr.ClientEmail),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{{
 			Quantity: stripe.Int64(1),
@@ -79,8 +79,8 @@ func (s *service) createCheckoutSession(ctx context.Context, pr sqlc.PaymentRequ
 	return sess, nil
 }
 
-func (s *service) payPageURL(token, status string) string {
-	return fmt.Sprintf("%s/pay/%s?status=%s", s.cfg.FrontendURL, token, status)
+func (s *service) clientReturnURL(status string) string {
+	return fmt.Sprintf("%s/dashboard/client/bookings?payment=%s", s.cfg.FrontendURL, status)
 }
 
 func paymentIntentID(sess *stripe.CheckoutSession) *string {

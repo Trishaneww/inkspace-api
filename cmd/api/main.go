@@ -14,6 +14,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/database"
 	"github.com/trishaneupnexx/inkspace-api/internal/email"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
+	"github.com/trishaneupnexx/inkspace-api/internal/holds"
 	"github.com/trishaneupnexx/inkspace-api/internal/maintenance"
 	"github.com/trishaneupnexx/inkspace-api/internal/messaging"
 	"github.com/trishaneupnexx/inkspace-api/internal/redisclient"
@@ -23,8 +24,9 @@ import (
 )
 
 const (
-	cleanupInterval  = time.Hour
-	reminderInterval = time.Hour
+	cleanupInterval   = time.Hour
+	reminderInterval  = time.Hour
+	holdSweepInterval = 10 * time.Minute
 )
 
 func main() {
@@ -78,6 +80,7 @@ func main() {
 	smsSender := messaging.NewSender(cfg, log)
 	emailClient := email.NewClient(cfg.FrontendURL, cfg.InternalEmailSecret, log)
 	go reminders.New(db, smsSender, emailClient, cfg.FrontendURL, log, reminderInterval).Run(ctx)
+	go holds.New(db, emailClient, log, holdSweepInterval).Run(ctx)
 
 	go func() {
 		if err := srv.Start(); err != nil {

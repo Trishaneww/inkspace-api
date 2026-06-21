@@ -23,6 +23,8 @@ type Repository interface {
 
 	GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (sqlc.GetArtistEarningsRow, error)
 	ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.ListRecentPaidPaymentsForArtistRow, error)
+	SumPaidDepositsForBooking(ctx context.Context, bookingRequestID uuid.UUID) (int64, error)
+	SetDepositScheduledStart(ctx context.Context, params sqlc.SetDepositScheduledStartParams) error
 
 	CreatePaymentRequest(ctx context.Context, params sqlc.CreatePaymentRequestParams) (sqlc.PaymentRequest, error)
 	GetPaymentRequestByToken(ctx context.Context, token string) (sqlc.PaymentRequest, error)
@@ -73,6 +75,14 @@ func (r *repository) GetArtistEarnings(ctx context.Context, artistID uuid.UUID) 
 
 func (r *repository) ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.ListRecentPaidPaymentsForArtistRow, error) {
 	return r.q.ListRecentPaidPaymentsForArtist(ctx, artistID)
+}
+
+func (r *repository) SumPaidDepositsForBooking(ctx context.Context, bookingRequestID uuid.UUID) (int64, error) {
+	return r.q.SumPaidDepositsForBooking(ctx, bookingRequestID)
+}
+
+func (r *repository) SetDepositScheduledStart(ctx context.Context, params sqlc.SetDepositScheduledStartParams) error {
+	return r.q.SetDepositScheduledStart(ctx, params)
 }
 
 func (r *repository) GetUserByEmail(ctx context.Context, email string) (sqlc.User, error) {

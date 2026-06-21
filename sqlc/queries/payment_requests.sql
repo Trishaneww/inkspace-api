@@ -2,13 +2,23 @@
 INSERT INTO payment_requests (
     artist_id, booking_request_id, type, currency,
     amount_cents, platform_fee_cents, client_charge_cents, fee_payer,
-    client_email, client_name, description, public_token, expires_at
+    client_email, client_name, description, public_token, expires_at,
+    scheduled_start
 ) VALUES (
     @artist_id, @booking_request_id, @type, @currency,
     @amount_cents, @platform_fee_cents, @client_charge_cents, @fee_payer,
-    @client_email, @client_name, @description, @public_token, @expires_at
+    @client_email, @client_name, @description, @public_token, @expires_at,
+    sqlc.narg('scheduled_start')
 )
 RETURNING *;
+
+-- name: SetDepositScheduledStart :exec
+UPDATE payment_requests
+SET scheduled_start = sqlc.narg('scheduled_start'),
+    updated_at      = now()
+WHERE booking_request_id = @booking_request_id
+  AND type = 'deposit'
+  AND status IN ('requested', 'processing');
 
 -- name: GetPaymentRequestByToken :one
 SELECT * FROM payment_requests WHERE public_token = $1;
@@ -108,6 +118,27 @@ UPDATE booking_requests
 SET deposit_status = @deposit_status::text,
     updated_at     = now()
 WHERE id = @booking_request_id;
+
+-- name: SetBookingDepositAmount :exec
+UPDATE booking_requests
+SET deposit_amount_cents = sqlc.narg('deposit_amount_cents'),
+    updated_at           = now()
+WHERE id = @booking_request_id;
+
+-- name: SumPaidDepositsForBooking :one
+SELECT COALESCE(SUM(amount_cents), 0)::bigint AS deposit_paid_cents
+FROM payment_requests
+WHERE booking_request_id = @booking_request_id
+  AND type = 'deposit'
+  AND status = 'paid';
+
+-- name: ExpireDepositRequestsForBooking :exec
+UPDATE payment_requests
+SET status     = 'expired',
+    updated_at = now()
+WHERE booking_request_id = @booking_request_id
+  AND type = 'deposit'
+  AND status IN ('requested', 'processing');
 
 -- name: GetArtistEarnings :one
 SELECT

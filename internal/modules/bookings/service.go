@@ -19,19 +19,23 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/crypto"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
+	"github.com/trishaneupnexx/inkspace-api/internal/modules/payments"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 )
 
 const presignViewTTL = 1 * time.Hour
+const HoldTTL = 48 * time.Hour
 
 var (
-	ErrNotFound          = errors.New("inquiry not found")
-	ErrNoOpenBook        = errors.New("artist has no open book")
-	ErrInvalidSchedule   = errors.New("invalid schedule: a session length is required, and a start time is required when you schedule clients yourself")
-	ErrScheduleConflict  = errors.New("that time overlaps an appointment you've already scheduled")
-	ErrInvalidInput      = errors.New("missing or invalid appointment details")
-	ErrNotAwaitingClient = errors.New("this booking is not awaiting a time selection")
-	ErrSlotUnavailable   = errors.New("that time is no longer available")
+	ErrNotFound           = errors.New("inquiry not found")
+	ErrNoOpenBook         = errors.New("artist has no open book")
+	ErrInvalidSchedule    = errors.New("invalid schedule: a session length is required, and a start time is required when you schedule clients yourself")
+	ErrScheduleConflict   = errors.New("that time overlaps an appointment you've already scheduled")
+	ErrInvalidInput       = errors.New("missing or invalid appointment details")
+	ErrNotAwaitingClient  = errors.New("this booking is not awaiting a time selection")
+	ErrSlotUnavailable    = errors.New("that time is no longer available")
+	ErrStripeNotConnected = errors.New("connect your Stripe account before taking a deposit")
+	ErrInvalidDeposit     = errors.New("deposit must be at least the minimum charge")
 )
 
 type Service interface {
@@ -52,14 +56,18 @@ type Service interface {
 	DeclineInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	ReopenInquiry(ctx context.Context, userID, inquiryID uuid.UUID) (Inquiry, error)
 	SeedDevInquiries(ctx context.Context, userID uuid.UUID) (int, error)
+
+	SetDepositRequester(requester DepositRequester)
+	ConfirmDepositPaid(ctx context.Context, bookingRequestID uuid.UUID, scheduledStart *time.Time) (payments.DepositConfirmation, error)
 }
 
 type service struct {
-	repo     Repository
-	s3       *s3client.Client
-	calendar *calendarClient
-	cfg      *config.Config
-	log      *slog.Logger
+	repo             Repository
+	s3               *s3client.Client
+	calendar         *calendarClient
+	cfg              *config.Config
+	log              *slog.Logger
+	depositRequester DepositRequester
 }
 
 func NewService(repo Repository, s3 *s3client.Client, cfg *config.Config, cipher *crypto.Cipher) Service {
@@ -260,6 +268,31 @@ func (s *service) CreateManualAppointment(ctx context.Context, userID uuid.UUID,
 		sessionDuration = &d
 	}
 
+	var deposit int64
+	if apptType == string(AppointmentSession) {
+		_ = s.repo.EnsureArtistSettings(ctx, artist.ID)
+		settings, err := s.repo.GetArtistSettings(ctx, artist.ID)
+		if err != nil {
+			return Inquiry{}, err
+		}
+		deposit = resolveDepositCents(input.DepositAmountCents, settings)
+		if deposit > 0 && deposit < payments.MinChargeCents {
+			return Inquiry{}, ErrInvalidDeposit
+		}
+		if deposit > 0 && (settings.StripeAccountID == nil || *settings.StripeAccountID == "" || !settings.StripeChargesEnabled) {
+			return Inquiry{}, ErrStripeNotConnected
+		}
+	}
+	holdManual := deposit > 0
+	apptStatus := appointmentScheduled
+	depositStatus := "not_required"
+	var holdExpiry pgtype.Timestamptz
+	if holdManual {
+		apptStatus = appointmentAwaitingDeposit
+		depositStatus = "pending"
+		holdExpiry = pgtype.Timestamptz{Time: time.Now().Add(HoldTTL), Valid: true}
+	}
+
 	req, err := s.repo.CreateBookingRequest(ctx, sqlc.CreateBookingRequestParams{
 		ArtistID:               artist.ID,
 		OpenBookID:             book.ID,
@@ -277,7 +310,7 @@ func (s *service) CreateManualAppointment(ctx context.Context, userID uuid.UUID,
 		ClientEmail:            strings.TrimSpace(input.ClientEmail),
 		ClientPhone:            input.ClientPhone,
 		Status:                 "accepted",
-		DepositStatus:          "not_required",
+		DepositStatus:          depositStatus,
 		WaiverStatus:           "not_required",
 		SessionDurationMinutes: sessionDuration,
 	})
@@ -289,13 +322,17 @@ func (s *service) CreateManualAppointment(ctx context.Context, userID uuid.UUID,
 		ArtistID:         artist.ID,
 		BookingRequestID: req.ID,
 		Type:             apptType,
-		Status:           appointmentScheduled,
+		Status:           apptStatus,
 		ScheduledStart:   start,
 		DurationMinutes:  input.DurationMinutes,
 		Format:           format,
 		SchedulingOrigin: originArtistSet,
+		HoldExpiresAt:    holdExpiry,
 	})
 	if err != nil {
+		return Inquiry{}, err
+	}
+	if err := s.setBookingDeposit(ctx, req.ID, deposit); err != nil {
 		return Inquiry{}, err
 	}
 
@@ -303,7 +340,15 @@ func (s *service) CreateManualAppointment(ctx context.Context, userID uuid.UUID,
 	if err != nil {
 		return Inquiry{}, err
 	}
-	s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
+	if holdManual {
+		token, err := s.depositRequester.CreateDepositRequest(ctx, artist.ID, req.ID, deposit, nil)
+		if err != nil {
+			return Inquiry{}, err
+		}
+		s.sendDepositRequestEmail(inquiry, s.artistDisplayName(ctx, artist.ID), token, deposit, s.artistCurrency(ctx, artist.ID), s.appointmentWhenLabel(ctx, artist.ID, appt))
+	} else {
+		s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
+	}
 	return inquiry, nil
 }
 
@@ -396,12 +441,32 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 			mode = schedulingArtist
 		}
 	}
+	_ = s.repo.EnsureArtistSettings(ctx, artist.ID)
+	settings, err := s.repo.GetArtistSettings(ctx, artist.ID)
+	if err != nil {
+		return Inquiry{}, err
+	}
+	deposit := resolveDepositCents(input.DepositAmountCents, settings)
+	if deposit > 0 && deposit < payments.MinChargeCents {
+		return Inquiry{}, ErrInvalidDeposit
+	}
+	if deposit > 0 && (settings.StripeAccountID == nil || *settings.StripeAccountID == "" || !settings.StripeChargesEnabled) {
+		return Inquiry{}, ErrStripeNotConnected
+	}
+
 	apptStatus, origin, start, err := resolveSchedule(mode, input.ScheduledStart)
 	if err != nil {
 		return Inquiry{}, err
 	}
 	if err := s.assertNoConflict(ctx, artist.ID, inquiryID, start, duration); err != nil {
 		return Inquiry{}, err
+	}
+
+	holdManual := deposit > 0 && mode == schedulingArtist
+	var holdExpiry pgtype.Timestamptz
+	if holdManual {
+		apptStatus = appointmentAwaitingDeposit
+		holdExpiry = pgtype.Timestamptz{Time: time.Now().Add(HoldTTL), Valid: true}
 	}
 
 	appt, err := s.repo.CreateAppointment(ctx, sqlc.CreateAppointmentParams{
@@ -412,12 +477,16 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 		ScheduledStart:   start,
 		DurationMinutes:  duration,
 		SchedulingOrigin: origin,
+		HoldExpiresAt:    holdExpiry,
 	})
 	if err != nil {
 		return Inquiry{}, err
 	}
 
-	depositStatus := s.resolveDepositStatus(ctx, artist.ID)
+	depositStatus := "not_required"
+	if deposit > 0 {
+		depositStatus = "pending"
+	}
 	inquiry, err := s.updateStatus(ctx, artist.ID, inquiryID, sqlc.UpdateBookingRequestStatusParams{
 		Status:                 "accepted",
 		SessionDurationMinutes: &duration,
@@ -426,16 +495,40 @@ func (s *service) AcceptInquiry(ctx context.Context, userID, inquiryID uuid.UUID
 	if err != nil {
 		return Inquiry{}, err
 	}
+	if err := s.setBookingDeposit(ctx, inquiryID, deposit); err != nil {
+		return Inquiry{}, err
+	}
 	if inquiry.Type == RequestTypeFlash && inquiry.FlashID != nil {
 		if err := s.claimFlash(ctx, artist.ID, inquiryID, *inquiry.FlashID); err != nil {
 			return Inquiry{}, err
 		}
 	}
-	if mode == schedulingClient {
+
+	switch {
+	case holdManual:
+		token, err := s.depositRequester.CreateDepositRequest(ctx, artist.ID, inquiryID, deposit, nil)
+		if err != nil {
+			return Inquiry{}, err
+		}
+		s.sendDepositRequestEmail(inquiry, s.artistDisplayName(ctx, artist.ID), token, deposit, s.artistCurrency(ctx, artist.ID), s.appointmentWhenLabel(ctx, artist.ID, appt))
+	case mode == schedulingClient:
 		s.sendScheduleInvite(ctx, artist.ID, inquiryID, duration)
+	default:
+		// Manual, no deposit: confirm immediately on the calendar (today's behavior).
+		s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
 	}
-	s.syncAppointmentToCalendar(ctx, artist.ID, appt, inquiry)
 	return inquiry, nil
+}
+
+func (s *service) setBookingDeposit(ctx context.Context, bookingID uuid.UUID, deposit int64) error {
+	var amount *int64
+	if deposit > 0 {
+		amount = &deposit
+	}
+	return s.repo.SetBookingDepositAmount(ctx, sqlc.SetBookingDepositAmountParams{
+		BookingRequestID:   bookingID,
+		DepositAmountCents: amount,
+	})
 }
 
 func (s *service) RequestConsultation(ctx context.Context, userID, inquiryID uuid.UUID, input RequestConsultationInput) (Inquiry, error) {
@@ -591,7 +684,8 @@ func (s *service) ListAvailableSlots(ctx context.Context, userID, inquiryID uuid
 		}
 		return SlotList{}, err
 	}
-	if appt.Status != appointmentProposed || appt.ScheduledStart.Valid {
+
+	if appt.Status != appointmentProposed && appt.Status != appointmentAwaitingDeposit {
 		return SlotList{}, ErrNotAwaitingClient
 	}
 
@@ -609,7 +703,7 @@ func (s *service) ListAvailableSlots(ctx context.Context, userID, inquiryID uuid
 	if err != nil {
 		return SlotList{}, ErrInvalidInput
 	}
-	busy, err := s.repo.ListAppointmentsByArtistInRange(ctx, sqlc.ListAppointmentsByArtistInRangeParams{
+	busy, err := s.repo.ListBusyAppointmentsByArtistInRange(ctx, sqlc.ListBusyAppointmentsByArtistInRangeParams{
 		ArtistID:   row.ArtistID,
 		RangeStart: pgtype.Timestamptz{Time: day, Valid: true},
 		RangeEnd:   pgtype.Timestamptz{Time: day.AddDate(0, 0, 1), Valid: true},
@@ -648,7 +742,8 @@ func (s *service) ScheduleClientBooking(ctx context.Context, userID, inquiryID u
 		}
 		return Inquiry{}, err
 	}
-	if appt.Status != appointmentProposed || appt.ScheduledStart.Valid {
+
+	if appt.Status != appointmentProposed && appt.Status != appointmentAwaitingDeposit {
 		return Inquiry{}, ErrNotAwaitingClient
 	}
 
@@ -664,7 +759,7 @@ func (s *service) ScheduleClientBooking(ctx context.Context, userID, inquiryID u
 	loc := loadLocation(settings.Timezone)
 	startLocal := input.ScheduledStart.In(loc)
 	day := time.Date(startLocal.Year(), startLocal.Month(), startLocal.Day(), 0, 0, 0, 0, loc)
-	busy, err := s.repo.ListAppointmentsByArtistInRange(ctx, sqlc.ListAppointmentsByArtistInRangeParams{
+	busy, err := s.repo.ListBusyAppointmentsByArtistInRange(ctx, sqlc.ListBusyAppointmentsByArtistInRangeParams{
 		ArtistID:   row.ArtistID,
 		RangeStart: pgtype.Timestamptz{Time: day, Valid: true},
 		RangeEnd:   pgtype.Timestamptz{Time: day.AddDate(0, 0, 1), Valid: true},
@@ -677,10 +772,26 @@ func (s *service) ScheduleClientBooking(ctx context.Context, userID, inquiryID u
 		return Inquiry{}, ErrSlotUnavailable
 	}
 
+	start := pgtype.Timestamptz{Time: input.ScheduledStart, Valid: true}
+
+	deposit := int64(0)
+	if row.DepositAmountCents != nil {
+		deposit = *row.DepositAmountCents
+	}
+	if deposit > 0 {
+		if err := s.ensureClientDepositRequest(ctx, row.ArtistID, inquiryID, deposit, input.ScheduledStart); err != nil {
+			return Inquiry{}, err
+		}
+		inquiry := inquiryFromRow(row)
+		inquiry.Appointment = appointmentFromRow(appt)
+		s.attachClientPayments(ctx, row.ID, &inquiry)
+		return inquiry, nil
+	}
+
 	synced, err := s.repo.UpdateAppointmentSchedule(ctx, sqlc.UpdateAppointmentScheduleParams{
 		ID:             appt.ID,
 		ArtistID:       row.ArtistID,
-		ScheduledStart: pgtype.Timestamptz{Time: input.ScheduledStart, Valid: true},
+		ScheduledStart: start,
 	})
 	if err != nil {
 		return Inquiry{}, err
@@ -873,17 +984,6 @@ func (s *service) requireOpenBook(ctx context.Context, artistID uuid.UUID) (sqlc
 		return sqlc.OpenBook{}, err
 	}
 	return book, nil
-}
-
-func (s *service) resolveDepositStatus(ctx context.Context, artistID uuid.UUID) string {
-	if err := s.repo.EnsureArtistSettings(ctx, artistID); err == nil {
-		if settings, err := s.repo.GetArtistSettings(ctx, artistID); err == nil {
-			if settings.DepositFlatFeeCents != nil && *settings.DepositFlatFeeCents > 0 {
-				return "pending"
-			}
-		}
-	}
-	return "not_required"
 }
 
 func (s *service) claimFlash(ctx context.Context, artistID, bookingID uuid.UUID, flashIDStr string) error {

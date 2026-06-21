@@ -17,7 +17,7 @@ func buildSlots(
 	day time.Time,
 	loc *time.Location,
 	windows []sqlc.ArtistAvailabilityWindow,
-	busyRows []sqlc.ListAppointmentsByArtistInRangeRow,
+	busyRows []sqlc.ListBusyAppointmentsByArtistInRangeRow,
 	duration int32,
 	settings sqlc.ArtistSetting,
 	now time.Time,
