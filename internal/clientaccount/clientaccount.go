@@ -84,6 +84,7 @@ func Create(ctx context.Context, store Store, cfg *config.Config, email string, 
 		FirstName:    first,
 		LastName:     last,
 		Phone:        strings.TrimSpace(input.Phone),
+		AuthProvider: "password",
 	})
 	if err != nil {
 		if isUniqueViolation(err) {

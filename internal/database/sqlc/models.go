@@ -297,4 +297,5 @@ type User struct {
 	InstagramURL         *string            `json:"instagram_url"`
 	MarketingOptInAt     pgtype.Timestamptz `json:"marketing_opt_in_at"`
 	MarketingOptInSource *string            `json:"marketing_opt_in_source"`
+	AuthProvider         string             `json:"auth_provider"`
 }

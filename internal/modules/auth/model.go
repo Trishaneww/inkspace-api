@@ -14,6 +14,12 @@ const (
 	RoleUser        Role = "user"
 )
 
+const (
+	ProviderPassword  = "password"
+	ProviderGoogle    = "google"
+	ProviderMicrosoft = "microsoft"
+)
+
 type User struct {
 	ID              string  `json:"id"`
 	Email           string  `json:"email"`
@@ -23,8 +29,8 @@ type User struct {
 	Phone           string  `json:"phone,omitempty"`
 	AvatarURL       string  `json:"avatarUrl,omitempty"`
 	PhoneVerifiedAt *string `json:"phoneVerifiedAt,omitempty"`
-	OnboardedAt *string `json:"onboardedAt,omitempty"`
-	CreatedAt   string  `json:"createdAt"`
+	OnboardedAt     *string `json:"onboardedAt,omitempty"`
+	CreatedAt       string  `json:"createdAt"`
 }
 
 func userFromRecord(u sqlc.User) User {

@@ -364,7 +364,7 @@ func (q *Queries) GetArtistSettingsByStripeAccount(ctx context.Context, stripeAc
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source FROM users WHERE username = $1
+SELECT id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source, auth_provider FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username *string) (User, error) {
@@ -387,6 +387,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username *string) (User
 		&i.InstagramURL,
 		&i.MarketingOptInAt,
 		&i.MarketingOptInSource,
+		&i.AuthProvider,
 	)
 	return i, err
 }
@@ -951,7 +952,7 @@ UPDATE users
 SET email      = $1,
     updated_at = now()
 WHERE id = $2
-RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source, auth_provider
 `
 
 type UpdateUserEmailParams struct {
@@ -979,6 +980,7 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.InstagramURL,
 		&i.MarketingOptInAt,
 		&i.MarketingOptInSource,
+		&i.AuthProvider,
 	)
 	return i, err
 }
@@ -993,7 +995,7 @@ SET first_name    = COALESCE($1::text,    first_name),
     instagram_url = COALESCE($6::text, instagram_url),
     updated_at    = now()
 WHERE id = $7
-RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source
+RETURNING id, email, password_hash, role, email_verified_at, created_at, updated_at, first_name, last_name, phone, phone_verified_at, username, avatar_url, instagram_url, marketing_opt_in_at, marketing_opt_in_source, auth_provider
 `
 
 type UpdateUserProfileParams struct {
@@ -1034,6 +1036,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.InstagramURL,
 		&i.MarketingOptInAt,
 		&i.MarketingOptInSource,
+		&i.AuthProvider,
 	)
 	return i, err
 }

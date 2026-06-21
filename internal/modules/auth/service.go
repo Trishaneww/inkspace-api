@@ -30,6 +30,7 @@ import (
 var (
 	ErrInvalidCredentials          = errors.New("invalid credentials")
 	ErrEmailTaken                  = errors.New("email already in use")
+	ErrEmailUsedWithOtherProvider  = errors.New("This email is already registered. Please sign in using the method you originally signed up with.")
 	ErrPhoneTaken                  = errors.New("phone number already in use")
 	ErrPhoneVerificationNotFound   = errors.New("phone verification not found or expired")
 	ErrInvalidVerificationCode     = errors.New("invalid verification code")
@@ -139,6 +140,7 @@ func (s *service) Register(
 				Phone:        phone,
 				Username:     username,
 				InstagramURL: instagram,
+				AuthProvider: ProviderPassword,
 			},
 		)
 		if err != nil {
@@ -156,6 +158,7 @@ func (s *service) Register(
 		Phone:        phone,
 		Username:     username,
 		InstagramURL: instagram,
+		AuthProvider: ProviderPassword,
 	})
 	if err != nil {
 		return nil, err
@@ -421,6 +424,12 @@ func (s *service) OAuthCallback(
 	user, err := s.repo.GetUserByEmail(ctx, claims.Email)
 	switch {
 	case err == nil:
+		// An email belongs to exactly one provider. If it was registered with a
+		// password or a different OAuth provider, refuse rather than silently
+		// signing into (or duplicating) the existing account.
+		if user.AuthProvider != in.Provider {
+			return nil, ErrEmailUsedWithOtherProvider
+		}
 		pair, err := s.issueTokenPair(ctx, user)
 		if err != nil {
 			return nil, err
@@ -465,7 +474,11 @@ func (s *service) CompleteOAuthSignup(
 	firstName := strings.TrimSpace(in.FirstName)
 	lastName := strings.TrimSpace(in.LastName)
 	var username, instagram *string
-	_ = claims
+
+	provider := claims.Provider
+	if provider != ProviderGoogle && provider != ProviderMicrosoft {
+		return nil, ErrInvalidCredentials
+	}
 
 	hashBytes, err := bcrypt.GenerateFromPassword(
 		[]byte(in.Password), bcrypt.DefaultCost,
@@ -482,6 +495,11 @@ func (s *service) CompleteOAuthSignup(
 	}
 	if emailExists && existing.PhoneVerifiedAt.Valid {
 		return nil, ErrEmailTaken
+	}
+	// An unverified row from a password signup or a different provider must not
+	// be silently taken over by this provider.
+	if emailExists && existing.AuthProvider != provider {
+		return nil, ErrEmailUsedWithOtherProvider
 	}
 
 	phoneOwner, err := s.repo.GetUserByPhone(ctx, phone)
@@ -506,6 +524,7 @@ func (s *service) CompleteOAuthSignup(
 				Phone:        phone,
 				Username:     username,
 				InstagramURL: instagram,
+				AuthProvider: provider,
 			},
 		)
 		if err != nil {
@@ -523,6 +542,7 @@ func (s *service) CompleteOAuthSignup(
 		Phone:        phone,
 		Username:     username,
 		InstagramURL: instagram,
+		AuthProvider: provider,
 	})
 	if err != nil {
 		return nil, err
