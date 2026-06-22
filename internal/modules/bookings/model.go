@@ -31,9 +31,11 @@ const (
 // CHECK constraints (open_books.scheduling_mode, appointments.*).
 const (
 	schedulingArtist = "artist_scheduled"
+	schedulingClient = "client_scheduled"
 
-	appointmentProposed  = "proposed"
-	appointmentScheduled = "scheduled"
+	appointmentProposed        = "proposed"
+	appointmentAwaitingDeposit = "awaiting_deposit"
+	appointmentScheduled       = "scheduled"
 
 	originArtistSet    = "artist_set"
 	originClientBooked = "client_booked"
@@ -65,6 +67,7 @@ type Inquiry struct {
 	ClientPhone            string           `json:"clientPhone,omitempty"`
 	Status                 string           `json:"status"`
 	DepositStatus          string           `json:"depositStatus"`
+	DepositAmountCents     *int64           `json:"depositAmountCents,omitempty"`
 	WaiverStatus           string           `json:"waiverStatus"`
 	SessionDurationMinutes *int32           `json:"sessionDurationMinutes,omitempty"`
 	CreatedAt              string           `json:"createdAt"`
@@ -90,6 +93,7 @@ type InquiryPayment struct {
 	AmountCents       int64   `json:"amountCents"`
 	ClientChargeCents int64   `json:"clientChargeCents"`
 	PublicToken       string  `json:"publicToken"`
+	ScheduledStart    *string `json:"scheduledStart,omitempty"`
 	CreatedAt         string  `json:"createdAt"`
 	PaidAt            *string `json:"paidAt,omitempty"`
 }
@@ -167,9 +171,44 @@ type ClientInquiryListResponse struct {
 
 // ── Request payloads ─────────────────────────────────────────────────────────
 
+type ScheduleBookingInput struct {
+	ScheduledStart time.Time `json:"scheduledStart"`
+}
+
+type SlotOption struct {
+	Start string `json:"start"` // RFC3339 (UTC) absolute start
+	Label string `json:"label"` // e.g. "2:00 PM", in the artist's timezone
+}
+
+type SlotList struct {
+	Slots           []SlotOption `json:"slots"`
+	DurationMinutes int32        `json:"durationMinutes"`
+}
+
+type PublicBookingRequest struct {
+	ArtistName      string `json:"artistName"`
+	ClientEmail     string `json:"clientEmail"`
+	ClientName      string `json:"clientName"`
+	Status          string `json:"status"`
+	DurationMinutes int32  `json:"durationMinutes"`
+	HasAccount      bool   `json:"hasAccount"`
+}
+
+type CreateClientAccountInput struct {
+	FirstName      string `json:"firstName"`
+	LastName       string `json:"lastName"`
+	Phone          string `json:"phone"`
+	Password       string `json:"password"`
+	MarketingOptIn bool   `json:"marketingOptIn"`
+}
+
 type AcceptInput struct {
 	SessionDurationMinutes *int32     `json:"sessionDurationMinutes"`
 	ScheduledStart         *time.Time `json:"scheduledStart"`
+	ClientScheduled        *bool      `json:"clientScheduled"`
+	// Deposit for this session. nil falls back to the artist's default; an
+	// explicit 0 means "no deposit". Ignored for consultations.
+	DepositAmountCents *int64 `json:"depositAmountCents"`
 }
 
 type RequestConsultationInput struct {
@@ -200,6 +239,10 @@ type CreateAppointmentInput struct {
 	ApproxSizeInches *int32 `json:"approxSizeInches"`
 	ColorType        string `json:"colorType"`
 	Description      string `json:"description"`
+
+	// Deposit for a session (ignored for consultations). nil → artist default,
+	// explicit 0 → no deposit.
+	DepositAmountCents *int64 `json:"depositAmountCents"`
 }
 
 // ── Conversions ──────────────────────────────────────────────────────────────
@@ -219,6 +262,7 @@ func inquiryFromRow(row sqlc.BookingRequest) Inquiry {
 		ClientEmail:            row.ClientEmail,
 		Status:                 row.Status,
 		DepositStatus:          row.DepositStatus,
+		DepositAmountCents:     row.DepositAmountCents,
 		WaiverStatus:           row.WaiverStatus,
 		SessionDurationMinutes: row.SessionDurationMinutes,
 		CreatedAt:              formatTimestamp(row.CreatedAt),
@@ -305,6 +349,10 @@ func paymentFromRow(p sqlc.PaymentRequest) InquiryPayment {
 		ClientChargeCents: p.ClientChargeCents,
 		PublicToken:       p.PublicToken,
 		CreatedAt:         formatTimestamp(p.CreatedAt),
+	}
+	if p.ScheduledStart.Valid {
+		s := p.ScheduledStart.Time.UTC().Format(time.RFC3339)
+		out.ScheduledStart = &s
 	}
 	if p.PaidAt.Valid {
 		s := p.PaidAt.Time.UTC().Format(time.RFC3339)

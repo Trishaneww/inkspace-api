@@ -28,7 +28,13 @@ CREATE TABLE payment_requests (
     canceled_at TIMESTAMPTZ,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    last_emailed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    reminder_sent_at TIMESTAMPTZ,
+    -- Client-chosen session start carried until the deposit is paid (then the
+    -- appointment is scheduled at this time).
+    scheduled_start  TIMESTAMPTZ
 );
 
 CREATE INDEX idx_payment_requests_booking

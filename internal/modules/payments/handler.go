@@ -97,6 +97,32 @@ func (h *Handler) RefundPaymentRequest(c *gin.Context) {
 	httpx.OK(c, pr)
 }
 
+func (h *Handler) GetEarnings(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	earnings, err := h.svc.GetEarnings(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, earnings)
+}
+
+func (h *Handler) GetPayouts(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	payouts, err := h.svc.ListPayouts(c.Request.Context(), userID)
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	httpx.OK(c, payouts)
+}
+
 func (h *Handler) GetPaymentRequest(c *gin.Context) {
 	pr, err := h.svc.GetPublicPaymentRequest(c.Request.Context(), c.Param("token"))
 	if err != nil {
@@ -106,27 +132,17 @@ func (h *Handler) GetPaymentRequest(c *gin.Context) {
 	httpx.OK(c, pr)
 }
 
-func (h *Handler) CreateCheckout(c *gin.Context) {
-	resp, err := h.svc.CreateCheckout(c.Request.Context(), c.Param("token"))
+func (h *Handler) CreateClientCheckout(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.CreateClientCheckout(c.Request.Context(), userID, c.Param("token"))
 	if err != nil {
 		respondError(c, err)
 		return
 	}
 	httpx.OK(c, resp)
-}
-
-func (h *Handler) CreateClientAccount(c *gin.Context) {
-	var input CreateClientAccountInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		httpx.Error(c, http.StatusBadRequest, "invalid_input", "invalid request body")
-		return
-	}
-	session, err := h.svc.CreateClientAccount(c.Request.Context(), c.Param("token"), input)
-	if err != nil {
-		respondError(c, err)
-		return
-	}
-	httpx.Created(c, session)
 }
 
 func (h *Handler) Webhook(c *gin.Context) {
@@ -170,6 +186,10 @@ func respondError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusConflict, "account_exists", "an account with this email already exists")
 	case errors.Is(err, ErrWeakPassword):
 		httpx.Error(c, http.StatusBadRequest, "weak_password", "password must be at least 8 characters")
+	case errors.Is(err, ErrPhoneRequired):
+		httpx.Error(c, http.StatusBadRequest, "phone_required", err.Error())
+	case errors.Is(err, ErrPhoneTaken):
+		httpx.Error(c, http.StatusConflict, "phone_taken", err.Error())
 	case errors.Is(err, ErrAmountTooLow):
 		httpx.Error(c, http.StatusBadRequest, "amount_too_low", err.Error())
 	case errors.Is(err, ErrNoDepositDefault):

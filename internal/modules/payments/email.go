@@ -1,10 +1,6 @@
 package payments
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"net/http"
 	"time"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
@@ -60,36 +56,31 @@ func (s *service) sendPaymentReceiptEmail(row sqlc.PaymentRequest, artistName st
 	})
 }
 
+type depositPaidEmailPayload struct {
+	To              string `json:"to"`
+	ArtistName      string `json:"artistName"`
+	ClientName      string `json:"clientName"`
+	AmountCents     int64  `json:"amountCents"`
+	Currency        string `json:"currency"`
+	WhenLabel       string `json:"whenLabel"`
+	DurationMinutes int32  `json:"durationMinutes"`
+}
+
+func (s *service) sendDepositPaidEmail(row sqlc.PaymentRequest, confirmation DepositConfirmation) {
+	if confirmation.ArtistEmail == "" {
+		return
+	}
+	s.postInternalEmail("/api/internal/emails/deposit-paid", depositPaidEmailPayload{
+		To:              confirmation.ArtistEmail,
+		ArtistName:      confirmation.ArtistName,
+		ClientName:      confirmation.ClientName,
+		AmountCents:     row.AmountCents,
+		Currency:        row.Currency,
+		WhenLabel:       confirmation.WhenLabel,
+		DurationMinutes: confirmation.DurationMinutes,
+	})
+}
+
 func (s *service) postInternalEmail(path string, payload any) {
-	if s.cfg.InternalEmailSecret == "" {
-		return
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		s.log.Warn("internal_email_marshal_failed", "path", path, "error", err)
-		return
-	}
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.FrontendURL+path, bytes.NewReader(body))
-		if err != nil {
-			s.log.Warn("internal_email_request_failed", "path", path, "error", err)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("x-internal-secret", s.cfg.InternalEmailSecret)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			s.log.Warn("internal_email_send_failed", "path", path, "error", err)
-			return
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode >= http.StatusMultipleChoices {
-			s.log.Warn("internal_email_rejected", "path", path, "status", resp.StatusCode)
-		}
-	}()
+	s.email.Post(path, payload)
 }

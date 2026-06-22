@@ -8,19 +8,25 @@ CREATE TABLE users (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     first_name        TEXT,
     last_name         TEXT,
-    phone             TEXT,
+    phone             TEXT        NOT NULL,
     phone_verified_at TIMESTAMPTZ,
 
     username          CITEXT,
     avatar_url        TEXT,
-    instagram_url     TEXT
+    instagram_url     TEXT,
+
+    marketing_opt_in_at     TIMESTAMPTZ,
+    marketing_opt_in_source TEXT,
+
+    -- How the account authenticates. An email belongs to exactly one provider;
+    -- a second provider claiming the same email is rejected at sign-in.
+    auth_provider     TEXT        NOT NULL DEFAULT 'password'
+                      CHECK (auth_provider IN ('password', 'google', 'microsoft'))
 );
 
 CREATE INDEX idx_users_role ON users (role);
 
-CREATE UNIQUE INDEX idx_users_phone_unique
-    ON users (phone)
-    WHERE phone IS NOT NULL;
+CREATE UNIQUE INDEX idx_users_phone_unique ON users (phone);
 
 CREATE UNIQUE INDEX idx_users_username_unique
     ON users (username)

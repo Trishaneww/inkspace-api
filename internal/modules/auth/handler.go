@@ -154,6 +154,8 @@ func writeServiceError(c *gin.Context, err error) {
 		httpx.Error(c, http.StatusUnauthorized, "invalid_refresh_token", err.Error())
 	case errors.Is(err, ErrEmailTaken):
 		httpx.Error(c, http.StatusConflict, "email_taken", err.Error())
+	case errors.Is(err, ErrEmailUsedWithOtherProvider):
+		httpx.Error(c, http.StatusConflict, "email_taken", err.Error())
 	case errors.Is(err, ErrPhoneTaken):
 		httpx.Error(c, http.StatusConflict, "phone_taken", err.Error())
 	case errors.Is(err, ErrUsernameTaken):

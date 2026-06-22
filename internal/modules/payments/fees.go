@@ -6,16 +6,16 @@ import (
 )
 
 const (
-	PlatformFeePercent = 0.06
+	PlatformFeePercent        = 0.06
 	PlatformFeeMinCents int64 = 200
-	MinChargeCents int64 = 1000
-	PayLinkTTL = 7 * 24 * time.Hour
-	ResendCooldown = 15 * time.Minute
+	MinChargeCents      int64 = 1000
+	PayLinkTTL                = 7 * 24 * time.Hour
+	ResendCooldown            = 15 * time.Minute
 )
 
 type FeeBreakdown struct {
-	AmountCents int64
-	PlatformFeeCents int64
+	AmountCents       int64
+	PlatformFeeCents  int64
 	ClientChargeCents int64
 }
 

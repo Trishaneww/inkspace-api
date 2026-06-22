@@ -8,6 +8,10 @@ import (
 )
 
 func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
+	book := rg.Group("/booking")
+	book.GET("/:token", m.Handler.GetPublicBooking)
+	book.POST("/:token/account", m.Handler.CreateBookingAccount)
+
 	bookings := rg.Group("/current-user/bookings")
 	bookings.Use(middleware.RequireAuth(m.cfg.JWTSecret))
 	bookings.Use(middleware.RequireRole(string(auth.RoleArtist)))
@@ -18,6 +22,7 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	bookings.POST("/:id/accept", m.Handler.Accept)
 	bookings.POST("/:id/request-consultation", m.Handler.RequestConsultation)
 	bookings.POST("/:id/reschedule", m.Handler.Reschedule)
+	bookings.POST("/:id/resend-schedule-link", m.Handler.ResendScheduleLink)
 	bookings.POST("/:id/cancel", m.Handler.Cancel)
 	bookings.POST("/:id/decline", m.Handler.Decline)
 	bookings.POST("/:id/reopen", m.Handler.Reopen)
@@ -26,6 +31,8 @@ func (m *Module) RegisterRoutes(rg *gin.RouterGroup) {
 	clientInquiries.Use(middleware.RequireAuth(m.cfg.JWTSecret))
 	clientInquiries.Use(middleware.RequireRole(string(auth.RoleUser)))
 	clientInquiries.GET("", m.Handler.ListForClient)
+	clientInquiries.GET("/:id/slots", m.Handler.ListSlots)
+	clientInquiries.POST("/:id/schedule", m.Handler.ScheduleBooking)
 
 	calendar := rg.Group("/current-user/calendar")
 	calendar.Use(middleware.RequireAuth(m.cfg.JWTSecret))

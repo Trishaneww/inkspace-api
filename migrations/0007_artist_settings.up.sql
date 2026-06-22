@@ -49,7 +49,9 @@ CREATE TABLE artist_settings (
     aftercare TEXT  NOT NULL DEFAULT '',
     faqs      JSONB NOT NULL DEFAULT '[]',
 
-    current_location_id UUID REFERENCES artist_locations (id) ON DELETE SET NULL
+    current_location_id UUID REFERENCES artist_locations (id) ON DELETE SET NULL,
+
+    monthly_booking_goal INTEGER NOT NULL DEFAULT 20 CHECK (monthly_booking_goal > 0)
 );
 
 CREATE TABLE artist_availability_windows (

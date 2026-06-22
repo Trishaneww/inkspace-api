@@ -64,6 +64,7 @@ type Service interface {
 	ChangeEmail(ctx context.Context, userID uuid.UUID, input ChangeEmailInput) (Account, error)
 	ChangePassword(ctx context.Context, userID uuid.UUID, input ChangePasswordInput) error
 	PresignAvatarUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error)
+	PresignOpenBookBackgroundUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error)
 
 	// Onboarding
 	CompleteOnboarding(ctx context.Context, userID uuid.UUID, input OnboardingInput) (OnboardingResponse, error)
@@ -279,6 +280,19 @@ func (s *service) PresignAvatarUpload(ctx context.Context, userID uuid.UUID, con
 	return s.presignPut(ctx, key, contentType)
 }
 
+func (s *service) PresignOpenBookBackgroundUpload(ctx context.Context, userID uuid.UUID, contentType string) (PresignUploadResponse, error) {
+	ext, ok := avatarContentTypeToExt[contentType]
+	if !ok {
+		return PresignUploadResponse{}, fmt.Errorf("%w: unsupported content type %q (allowed: image/jpeg, image/png, image/webp)", ErrInvalidInput, contentType)
+	}
+	artist, err := s.requireArtist(ctx, userID)
+	if err != nil {
+		return PresignUploadResponse{}, err
+	}
+	key := fmt.Sprintf("open-book-backgrounds/%s/%s.%s", artist.ID, uuid.New(), ext)
+	return s.presignPut(ctx, key, contentType)
+}
+
 // ── Onboarding ──────────────────────────────────────────────────────────────
 func (s *service) CheckUsernameAvailable(ctx context.Context, userID uuid.UUID, username string) (UsernameAvailabilityResponse, error) {
 	username = strings.TrimSpace(username)
@@ -346,10 +360,15 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 			return err
 		}
 
+		goal := input.MonthlyBookingGoal
+		if goal != nil && *goal <= 0 {
+			goal = nil
+		}
 		if _, err := tx.UpdateArtistSettings(ctx, sqlc.UpdateArtistSettingsParams{
 			ArtistID:            artist.ID,
 			Timezone:            trimmedPtr(&input.Timezone),
 			DepositFlatFeeCents: input.DepositFlatFeeCents,
+			MonthlyBookingGoal:  goal,
 			Styles:              input.Styles,
 		}); err != nil {
 			return err
@@ -431,7 +450,7 @@ func (s *service) GetOpenBook(ctx context.Context, userID uuid.UUID) (OpenBookRe
 		}
 		return OpenBookResponse{}, err
 	}
-	return openBookResponse(book), nil
+	return s.openBookResponse(ctx, book), nil
 }
 
 func (s *service) UpdateOpenBook(ctx context.Context, userID uuid.UUID, input UpdateOpenBookInput) (OpenBookResponse, error) {
@@ -468,6 +487,29 @@ func (s *service) UpdateOpenBook(ctx context.Context, userID uuid.UUID, input Up
 		params.Slug = &slug
 	}
 
+	if input.Theme != nil {
+		if !OpenBookThemes[*input.Theme] {
+			return OpenBookResponse{}, fmt.Errorf("%w: unknown theme", ErrInvalidInput)
+		}
+		params.Theme = input.Theme
+	}
+
+	if input.CustomTheme != nil {
+		if err := validateCustomTheme(*input.CustomTheme); err != nil {
+			return OpenBookResponse{}, err
+		}
+		raw, err := json.Marshal(*input.CustomTheme)
+		if err != nil {
+			return OpenBookResponse{}, err
+		}
+		params.CustomTheme = raw
+	}
+
+	if input.BackgroundImageKey != nil {
+		params.BackgroundImageKey = input.BackgroundImageKey
+	}
+	params.ClearBackgroundImage = input.ClearBackgroundImage
+
 	if input.CustomQuestions != nil {
 		questions := make([]string, 0, len(*input.CustomQuestions))
 		for _, q := range *input.CustomQuestions {
@@ -495,15 +537,54 @@ func (s *service) UpdateOpenBook(ctx context.Context, userID uuid.UUID, input Up
 		}
 		return OpenBookResponse{}, err
 	}
-	return openBookResponse(book), nil
+	return s.openBookResponse(ctx, book), nil
 }
 
-func openBookResponse(book sqlc.OpenBook) OpenBookResponse {
-	return OpenBookResponse{
+func (s *service) openBookResponse(ctx context.Context, book sqlc.OpenBook) OpenBookResponse {
+	out := OpenBookResponse{
 		Slug:            book.Slug,
 		SchedulingMode:  book.SchedulingMode,
 		CustomQuestions: parseQuestions(book.CustomQuestions),
+		Theme:           book.Theme,
 	}
+	if len(book.CustomTheme) > 0 {
+		var ct CustomTheme
+		if err := json.Unmarshal(book.CustomTheme, &ct); err == nil {
+			out.CustomTheme = &ct
+		}
+	}
+	if book.BackgroundImageKey != nil && *book.BackgroundImageKey != "" {
+		out.BackgroundImageURL = s.presignKey(ctx, *book.BackgroundImageKey)
+	}
+	return out
+}
+
+// validateCustomTheme requires all four colors to be valid hex values.
+func validateCustomTheme(ct CustomTheme) error {
+	for _, c := range []string{ct.Background, ct.Card, ct.Button, ct.Text} {
+		if !isHexColor(c) {
+			return fmt.Errorf("%w: custom theme colors must be valid hex (e.g. #1A1A1A)", ErrInvalidInput)
+		}
+	}
+	return nil
+}
+
+func isHexColor(value string) bool {
+	if len(value) != 4 && len(value) != 7 {
+		return false
+	}
+	if value[0] != '#' {
+		return false
+	}
+	for _, r := range value[1:] {
+		isHexDigit := (r >= '0' && r <= '9') ||
+			(r >= 'a' && r <= 'f') ||
+			(r >= 'A' && r <= 'F')
+		if !isHexDigit {
+			return false
+		}
+	}
+	return true
 }
 
 func parseQuestions(raw []byte) []string {
@@ -551,6 +632,7 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 		TermsText:                    input.TermsText,
 		Aftercare:                    input.Aftercare,
 		AcceptingBookings:            input.AcceptingBookings,
+		MonthlyBookingGoal:           input.MonthlyBookingGoal,
 		TermsShowOnBooking:           input.TermsShowOnBooking,
 		TermsShowAtDeposit:           input.TermsShowAtDeposit,
 		WaiverRequired:               input.WaiverRequired,
@@ -598,6 +680,9 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 			return ArtistSettings{}, fmt.Errorf("%w: slotIntervalMinutes must be 15, 30, or 60", ErrInvalidInput)
 		}
 		params.SlotIntervalMinutes = input.SlotIntervalMinutes
+	}
+	if input.MonthlyBookingGoal != nil && *input.MonthlyBookingGoal <= 0 {
+		return ArtistSettings{}, fmt.Errorf("%w: monthlyBookingGoal must be greater than 0", ErrInvalidInput)
 	}
 	if input.Styles != nil {
 		if !allValidStyles(*input.Styles) {

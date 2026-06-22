@@ -11,9 +11,15 @@ SELECT * FROM open_books WHERE slug = $1;
 
 -- name: UpdateOpenBook :one
 UPDATE open_books
-SET slug             = COALESCE(sqlc.narg('slug')::citext, slug),
-    scheduling_mode  = COALESCE(sqlc.narg('scheduling_mode')::text, scheduling_mode),
-    custom_questions = COALESCE(sqlc.narg('custom_questions')::jsonb, custom_questions),
-    updated_at       = now()
+SET slug                 = COALESCE(sqlc.narg('slug')::citext, slug),
+    scheduling_mode      = COALESCE(sqlc.narg('scheduling_mode')::text, scheduling_mode),
+    custom_questions     = COALESCE(sqlc.narg('custom_questions')::jsonb, custom_questions),
+    theme                = COALESCE(sqlc.narg('theme')::text, theme),
+    custom_theme         = COALESCE(sqlc.narg('custom_theme')::jsonb, custom_theme),
+    background_image_key = CASE
+        WHEN @clear_background_image::boolean THEN NULL
+        ELSE COALESCE(sqlc.narg('background_image_key')::text, background_image_key)
+    END,
+    updated_at           = now()
 WHERE artist_id = @artist_id
 RETURNING *;

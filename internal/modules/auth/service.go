@@ -11,7 +11,6 @@ import (
 	"log"
 	"log/slog"
 	"math/big"
-	"os"
 	"strings"
 	"time"
 
@@ -24,12 +23,14 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
+	"github.com/trishaneupnexx/inkspace-api/internal/messaging"
 	"github.com/trishaneupnexx/inkspace-api/internal/ratelimit"
 )
 
 var (
 	ErrInvalidCredentials          = errors.New("invalid credentials")
 	ErrEmailTaken                  = errors.New("email already in use")
+	ErrEmailUsedWithOtherProvider  = errors.New("This email is already registered. Please sign in using the method you originally signed up with.")
 	ErrPhoneTaken                  = errors.New("phone number already in use")
 	ErrPhoneVerificationNotFound   = errors.New("phone verification not found or expired")
 	ErrInvalidVerificationCode     = errors.New("invalid verification code")
@@ -62,6 +63,7 @@ type service struct {
 
 	loginLockout *ratelimit.Lockout
 	otpLimiter   ratelimit.Limiter
+	sms          messaging.Sender
 	log          *slog.Logger
 }
 
@@ -72,13 +74,22 @@ func NewService(
 	loginLockout *ratelimit.Lockout,
 	otpLimiter ratelimit.Limiter,
 ) Service {
+	log := slog.Default()
 	return &service{
 		cfg:          cfg,
 		repo:         repo,
 		events:       pub,
 		loginLockout: loginLockout,
 		otpLimiter:   otpLimiter,
-		log:          slog.Default(),
+		sms:          messaging.NewSender(cfg, log),
+		log:          log,
+	}
+}
+
+func (s *service) sendOTP(ctx context.Context, phone, code string) {
+	body := fmt.Sprintf("Your Inkspace verification code is %s", code)
+	if err := s.sms.Send(ctx, phone, body); err != nil {
+		s.log.Warn("otp_send_failed", "error", err)
 	}
 }
 
@@ -107,7 +118,7 @@ func (s *service) Register(
 		return nil, ErrEmailTaken
 	}
 
-	phoneOwner, err := s.repo.GetUserByPhone(ctx, &phone)
+	phoneOwner, err := s.repo.GetUserByPhone(ctx, phone)
 	switch {
 	case err == nil:
 		if !emailExists || phoneOwner.ID != existing.ID {
@@ -126,15 +137,16 @@ func (s *service) Register(
 				Role:         string(in.Role),
 				FirstName:    &firstName,
 				LastName:     &lastName,
-				Phone:        &phone,
+				Phone:        phone,
 				Username:     username,
-			InstagramURL: instagram,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return s.issuePhoneVerification(ctx, updated)
+				InstagramURL: instagram,
+				AuthProvider: ProviderPassword,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return s.issuePhoneVerification(ctx, updated)
 	}
 
 	user, err := s.repo.CreateUser(ctx, sqlc.CreateUserParams{
@@ -143,9 +155,10 @@ func (s *service) Register(
 		Role:         string(in.Role),
 		FirstName:    &firstName,
 		LastName:     &lastName,
-		Phone:        &phone,
+		Phone:        phone,
 		Username:     username,
 		InstagramURL: instagram,
+		AuthProvider: ProviderPassword,
 	})
 	if err != nil {
 		return nil, err
@@ -229,11 +242,11 @@ func (s *service) otpSendAllowed(ctx context.Context, phone string) bool {
 func (s *service) issuePhoneVerification(
 	ctx context.Context, user sqlc.User,
 ) (*PhoneVerificationRequiredResponse, error) {
-	if user.Phone == nil || *user.Phone == "" {
+	if user.Phone == "" {
 		return nil, errors.New("user has no phone on file")
 	}
 
-	if !s.otpSendAllowed(ctx, *user.Phone) {
+	if !s.otpSendAllowed(ctx, user.Phone) {
 		return nil, ErrTooManyOTPRequests
 	}
 
@@ -258,7 +271,7 @@ func (s *service) issuePhoneVerification(
 	verification, err := s.repo.CreatePhoneVerification(
 		ctx, sqlc.CreatePhoneVerificationParams{
 			UserID:    user.ID,
-			Phone:     *user.Phone,
+			Phone:     user.Phone,
 			CodeHash:  string(codeHash),
 			ExpiresAt: expires,
 		},
@@ -267,25 +280,12 @@ func (s *service) issuePhoneVerification(
 		return nil, err
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"\n"+
-			"✅ ═════════════════════════════════════════════════════ ✅\n"+
-			"   ✅✅✅  PHONE VERIFICATION CODE: %s  ✅✅✅\n"+
-			"✅ ═════════════════════════════════════════════════════ ✅\n"+
-			"      user:  %s\n"+
-			"      phone: %s\n"+
-			"      ttl:   %s (expires %s)\n",
-		code,
-		user.ID,
-		*user.Phone,
-		s.cfg.PhoneCodeTTL,
-		expires.Time.Format(time.RFC3339),
-	)
+	s.sendOTP(ctx, user.Phone, code)
 
 	return &PhoneVerificationRequiredResponse{
 		Status:         "phone_verification_required",
 		VerificationID: verification.ID.String(),
-		MaskedPhone:    maskPhone(*user.Phone),
+		MaskedPhone:    maskPhone(user.Phone),
 	}, nil
 }
 
@@ -395,20 +395,7 @@ func (s *service) ResendPhoneCode(
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr,
-		"\n"+
-			"♻️ ═════════════════════════════════════════════════════ ♻️\n"+
-			"   ♻️♻️♻️  RESENT PHONE VERIFICATION CODE: %s  ♻️♻️♻️\n"+
-			"♻️ ═════════════════════════════════════════════════════ ♻️\n"+
-			"      verification: %s\n"+
-			"      phone:        %s\n"+
-			"      ttl:          %s (expires %s)\n",
-		code,
-		verification.ID,
-		verification.Phone,
-		s.cfg.PhoneCodeTTL,
-		expires.Time.Format(time.RFC3339),
-	)
+	s.sendOTP(ctx, verification.Phone, code)
 	return nil
 }
 
@@ -437,6 +424,12 @@ func (s *service) OAuthCallback(
 	user, err := s.repo.GetUserByEmail(ctx, claims.Email)
 	switch {
 	case err == nil:
+		// An email belongs to exactly one provider. If it was registered with a
+		// password or a different OAuth provider, refuse rather than silently
+		// signing into (or duplicating) the existing account.
+		if user.AuthProvider != in.Provider {
+			return nil, ErrEmailUsedWithOtherProvider
+		}
 		pair, err := s.issueTokenPair(ctx, user)
 		if err != nil {
 			return nil, err
@@ -481,7 +474,11 @@ func (s *service) CompleteOAuthSignup(
 	firstName := strings.TrimSpace(in.FirstName)
 	lastName := strings.TrimSpace(in.LastName)
 	var username, instagram *string
-	_ = claims
+
+	provider := claims.Provider
+	if provider != ProviderGoogle && provider != ProviderMicrosoft {
+		return nil, ErrInvalidCredentials
+	}
 
 	hashBytes, err := bcrypt.GenerateFromPassword(
 		[]byte(in.Password), bcrypt.DefaultCost,
@@ -499,8 +496,13 @@ func (s *service) CompleteOAuthSignup(
 	if emailExists && existing.PhoneVerifiedAt.Valid {
 		return nil, ErrEmailTaken
 	}
+	// An unverified row from a password signup or a different provider must not
+	// be silently taken over by this provider.
+	if emailExists && existing.AuthProvider != provider {
+		return nil, ErrEmailUsedWithOtherProvider
+	}
 
-	phoneOwner, err := s.repo.GetUserByPhone(ctx, &phone)
+	phoneOwner, err := s.repo.GetUserByPhone(ctx, phone)
 	switch {
 	case err == nil:
 		if !emailExists || phoneOwner.ID != existing.ID {
@@ -519,15 +521,16 @@ func (s *service) CompleteOAuthSignup(
 				Role:         string(in.Role),
 				FirstName:    &firstName,
 				LastName:     &lastName,
-				Phone:        &phone,
-			Username:     username,
-			InstagramURL: instagram,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	return s.issuePhoneVerification(ctx, updated)
+				Phone:        phone,
+				Username:     username,
+				InstagramURL: instagram,
+				AuthProvider: provider,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return s.issuePhoneVerification(ctx, updated)
 	}
 
 	user, err := s.repo.CreateUser(ctx, sqlc.CreateUserParams{
@@ -536,9 +539,10 @@ func (s *service) CompleteOAuthSignup(
 		Role:         string(in.Role),
 		FirstName:    &firstName,
 		LastName:     &lastName,
-		Phone:        &phone,
+		Phone:        phone,
 		Username:     username,
 		InstagramURL: instagram,
+		AuthProvider: provider,
 	})
 	if err != nil {
 		return nil, err

@@ -22,6 +22,7 @@ type OAuthClaims struct {
 	Email     string
 	FirstName string
 	LastName  string
+	Provider  string
 }
 
 // tokenResponse is the shape returned by both Google and Microsoft token endpoints.
@@ -220,6 +221,7 @@ func verifyOAuthSession(cfg *config.Config, raw string) (*OAuthClaims, error) {
 	out.Email, _ = claims["email"].(string)
 	out.FirstName, _ = claims["first_name"].(string)
 	out.LastName, _ = claims["last_name"].(string)
+	out.Provider, _ = claims["provider"].(string)
 	if out.Email == "" || out.Subject == "" {
 		return nil, errors.New("oauth session token missing required claims")
 	}

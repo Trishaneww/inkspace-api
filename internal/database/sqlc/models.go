@@ -24,6 +24,8 @@ type Appointment struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	GoogleCalendarEventID *string            `json:"google_calendar_event_id"`
+	ReminderSentAt        pgtype.Timestamptz `json:"reminder_sent_at"`
+	HoldExpiresAt         pgtype.Timestamptz `json:"hold_expires_at"`
 }
 
 type Artist struct {
@@ -120,6 +122,7 @@ type ArtistSetting struct {
 	Aftercare                  string             `json:"aftercare"`
 	Faqs                       []byte             `json:"faqs"`
 	CurrentLocationID          pgtype.UUID        `json:"current_location_id"`
+	MonthlyBookingGoal         int32              `json:"monthly_booking_goal"`
 }
 
 type BookingRequest struct {
@@ -149,6 +152,9 @@ type BookingRequest struct {
 	ColorType              string             `json:"color_type"`
 	LocationID             pgtype.UUID        `json:"location_id"`
 	FlashSizeCode          string             `json:"flash_size_code"`
+	ScheduleToken          *string            `json:"schedule_token"`
+	ScheduleEmailedAt      pgtype.Timestamptz `json:"schedule_emailed_at"`
+	DepositAmountCents     *int64             `json:"deposit_amount_cents"`
 }
 
 type Flash struct {
@@ -185,13 +191,16 @@ type FlashPricingTier struct {
 }
 
 type OpenBook struct {
-	ID              uuid.UUID          `json:"id"`
-	ArtistID        uuid.UUID          `json:"artist_id"`
-	Slug            string             `json:"slug"`
-	SchedulingMode  string             `json:"scheduling_mode"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	CustomQuestions []byte             `json:"custom_questions"`
+	ID                 uuid.UUID          `json:"id"`
+	ArtistID           uuid.UUID          `json:"artist_id"`
+	Slug               string             `json:"slug"`
+	SchedulingMode     string             `json:"scheduling_mode"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	CustomQuestions    []byte             `json:"custom_questions"`
+	Theme              string             `json:"theme"`
+	CustomTheme        []byte             `json:"custom_theme"`
+	BackgroundImageKey *string            `json:"background_image_key"`
 }
 
 type PaymentRequest struct {
@@ -218,6 +227,8 @@ type PaymentRequest struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	LastEmailedAt           pgtype.Timestamptz `json:"last_emailed_at"`
+	ReminderSentAt          pgtype.Timestamptz `json:"reminder_sent_at"`
+	ScheduledStart          pgtype.Timestamptz `json:"scheduled_start"`
 }
 
 type PhoneVerification struct {
@@ -279,11 +290,12 @@ type User struct {
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	FirstName            *string            `json:"first_name"`
 	LastName             *string            `json:"last_name"`
-	Phone                *string            `json:"phone"`
+	Phone                string             `json:"phone"`
 	PhoneVerifiedAt      pgtype.Timestamptz `json:"phone_verified_at"`
 	Username             *string            `json:"username"`
 	AvatarURL            *string            `json:"avatar_url"`
 	InstagramURL         *string            `json:"instagram_url"`
 	MarketingOptInAt     pgtype.Timestamptz `json:"marketing_opt_in_at"`
 	MarketingOptInSource *string            `json:"marketing_opt_in_source"`
+	AuthProvider         string             `json:"auth_provider"`
 }

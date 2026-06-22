@@ -4,8 +4,10 @@ CREATE TABLE appointments (
     booking_request_id       UUID        NOT NULL REFERENCES booking_requests (id) ON DELETE CASCADE,
 
     type                     TEXT        NOT NULL CHECK (type IN ('consultation', 'session')),
+    -- 'awaiting_deposit' is a held slot: a concrete time blocked from others
+    -- until the deposit is paid, after which it flips to 'scheduled'.
     status                   TEXT        NOT NULL DEFAULT 'proposed'
-                             CHECK (status IN ('proposed', 'scheduled', 'completed', 'cancelled', 'no_show')),
+                             CHECK (status IN ('proposed', 'awaiting_deposit', 'scheduled', 'completed', 'cancelled', 'no_show')),
 
     scheduled_start          TIMESTAMPTZ,
     duration_minutes         INTEGER     NOT NULL CHECK (duration_minutes > 0),
@@ -16,8 +18,16 @@ CREATE TABLE appointments (
     created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    google_calendar_event_id TEXT
+    google_calendar_event_id TEXT,
+
+    reminder_sent_at         TIMESTAMPTZ,
+    -- When a held ('awaiting_deposit') slot lapses if the deposit goes unpaid.
+    hold_expires_at          TIMESTAMPTZ
 );
 
 CREATE INDEX idx_appointments_artist_start ON appointments (artist_id, scheduled_start);
 CREATE INDEX idx_appointments_request ON appointments (booking_request_id);
+
+CREATE INDEX idx_appointments_hold_expiry
+    ON appointments (hold_expires_at)
+    WHERE status = 'awaiting_deposit';

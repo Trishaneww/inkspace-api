@@ -48,6 +48,7 @@ SET payout_frequency       = COALESCE(sqlc.narg('payout_frequency')::text,      
     styles                 = COALESCE(sqlc.narg('styles')::text[],              styles),
     aftercare              = COALESCE(sqlc.narg('aftercare')::text,              aftercare),
     faqs                   = COALESCE(sqlc.narg('faqs')::jsonb,                  faqs),
+    monthly_booking_goal   = COALESCE(sqlc.narg('monthly_booking_goal')::integer, monthly_booking_goal),
 
     -- Nullable fields support explicit clearing via a paired boolean.
     deposit_flat_fee_cents = CASE

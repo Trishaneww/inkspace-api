@@ -24,7 +24,7 @@ INSERT INTO booking_requests (
     $14, $15, $16, $17, $18, $19,
     $20, $21
 )
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
 `
 
 type CreateBookingRequestParams struct {
@@ -103,6 +103,9 @@ func (q *Queries) CreateBookingRequest(ctx context.Context, arg CreateBookingReq
 		&i.ColorType,
 		&i.LocationID,
 		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
 	)
 	return i, err
 }
@@ -130,7 +133,7 @@ func (q *Queries) DeclineOtherFlashRequests(ctx context.Context, arg DeclineOthe
 }
 
 const getBookingRequest = `-- name: GetBookingRequest :one
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
 FROM booking_requests
 WHERE id = $1 AND artist_id = $2
 `
@@ -170,6 +173,50 @@ func (q *Queries) GetBookingRequest(ctx context.Context, arg GetBookingRequestPa
 		&i.ColorType,
 		&i.LocationID,
 		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
+	)
+	return i, err
+}
+
+const getBookingRequestByScheduleToken = `-- name: GetBookingRequestByScheduleToken :one
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents FROM booking_requests WHERE schedule_token = $1
+`
+
+func (q *Queries) GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (BookingRequest, error) {
+	row := q.db.QueryRow(ctx, getBookingRequestByScheduleToken, scheduleToken)
+	var i BookingRequest
+	err := row.Scan(
+		&i.ID,
+		&i.ArtistID,
+		&i.OpenBookID,
+		&i.Type,
+		&i.FlashID,
+		&i.Description,
+		&i.ReferenceImageKeys,
+		&i.Placement,
+		&i.ApproxSizeInches,
+		&i.ClientAvailability,
+		&i.ClientName,
+		&i.ClientEmail,
+		&i.ClientPhone,
+		&i.Status,
+		&i.DepositStatus,
+		&i.WaiverStatus,
+		&i.SessionDurationMinutes,
+		&i.ClientUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DecidedAt,
+		&i.Styles,
+		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
+		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
 	)
 	return i, err
 }
@@ -199,6 +246,52 @@ func (q *Queries) GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetB
 	return i, err
 }
 
+const getClientBookingRequest = `-- name: GetClientBookingRequest :one
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents FROM booking_requests WHERE id = $1 AND client_email = $2
+`
+
+type GetClientBookingRequestParams struct {
+	ID          uuid.UUID `json:"id"`
+	ClientEmail string    `json:"client_email"`
+}
+
+func (q *Queries) GetClientBookingRequest(ctx context.Context, arg GetClientBookingRequestParams) (BookingRequest, error) {
+	row := q.db.QueryRow(ctx, getClientBookingRequest, arg.ID, arg.ClientEmail)
+	var i BookingRequest
+	err := row.Scan(
+		&i.ID,
+		&i.ArtistID,
+		&i.OpenBookID,
+		&i.Type,
+		&i.FlashID,
+		&i.Description,
+		&i.ReferenceImageKeys,
+		&i.Placement,
+		&i.ApproxSizeInches,
+		&i.ClientAvailability,
+		&i.ClientName,
+		&i.ClientEmail,
+		&i.ClientPhone,
+		&i.Status,
+		&i.DepositStatus,
+		&i.WaiverStatus,
+		&i.SessionDurationMinutes,
+		&i.ClientUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DecidedAt,
+		&i.Styles,
+		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
+		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
+	)
+	return i, err
+}
+
 const linkBookingRequestsToClient = `-- name: LinkBookingRequestsToClient :exec
 UPDATE booking_requests
 SET client_user_id = $1,
@@ -218,7 +311,7 @@ func (q *Queries) LinkBookingRequestsToClient(ctx context.Context, arg LinkBooki
 }
 
 const listBookingRequestsByArtist = `-- name: ListBookingRequestsByArtist :many
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
 FROM booking_requests
 WHERE artist_id = $1
 ORDER BY created_at DESC
@@ -260,6 +353,9 @@ func (q *Queries) ListBookingRequestsByArtist(ctx context.Context, artistID uuid
 			&i.ColorType,
 			&i.LocationID,
 			&i.FlashSizeCode,
+			&i.ScheduleToken,
+			&i.ScheduleEmailedAt,
+			&i.DepositAmountCents,
 		); err != nil {
 			return nil, err
 		}
@@ -272,7 +368,7 @@ func (q *Queries) ListBookingRequestsByArtist(ctx context.Context, artistID uuid
 }
 
 const listBookingRequestsByClientEmail = `-- name: ListBookingRequestsByClientEmail :many
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
 FROM booking_requests
 WHERE client_email = $1
 ORDER BY created_at DESC
@@ -314,6 +410,9 @@ func (q *Queries) ListBookingRequestsByClientEmail(ctx context.Context, clientEm
 			&i.ColorType,
 			&i.LocationID,
 			&i.FlashSizeCode,
+			&i.ScheduleToken,
+			&i.ScheduleEmailedAt,
+			&i.DepositAmountCents,
 		); err != nil {
 			return nil, err
 		}
@@ -332,7 +431,7 @@ SET status         = 'pending',
     decided_at     = NULL,
     updated_at     = now()
 WHERE id = $1 AND artist_id = $2
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
 `
 
 type ReopenBookingRequestParams struct {
@@ -370,6 +469,111 @@ func (q *Queries) ReopenBookingRequest(ctx context.Context, arg ReopenBookingReq
 		&i.ColorType,
 		&i.LocationID,
 		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
+	)
+	return i, err
+}
+
+const setScheduleToken = `-- name: SetScheduleToken :one
+UPDATE booking_requests
+SET schedule_token      = $1::text,
+    schedule_emailed_at = now(),
+    updated_at          = now()
+WHERE id = $2 AND artist_id = $3
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+`
+
+type SetScheduleTokenParams struct {
+	ScheduleToken string    `json:"schedule_token"`
+	ID            uuid.UUID `json:"id"`
+	ArtistID      uuid.UUID `json:"artist_id"`
+}
+
+func (q *Queries) SetScheduleToken(ctx context.Context, arg SetScheduleTokenParams) (BookingRequest, error) {
+	row := q.db.QueryRow(ctx, setScheduleToken, arg.ScheduleToken, arg.ID, arg.ArtistID)
+	var i BookingRequest
+	err := row.Scan(
+		&i.ID,
+		&i.ArtistID,
+		&i.OpenBookID,
+		&i.Type,
+		&i.FlashID,
+		&i.Description,
+		&i.ReferenceImageKeys,
+		&i.Placement,
+		&i.ApproxSizeInches,
+		&i.ClientAvailability,
+		&i.ClientName,
+		&i.ClientEmail,
+		&i.ClientPhone,
+		&i.Status,
+		&i.DepositStatus,
+		&i.WaiverStatus,
+		&i.SessionDurationMinutes,
+		&i.ClientUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DecidedAt,
+		&i.Styles,
+		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
+		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
+	)
+	return i, err
+}
+
+const touchScheduleEmailedAt = `-- name: TouchScheduleEmailedAt :one
+UPDATE booking_requests
+SET schedule_emailed_at = now(),
+    updated_at          = now()
+WHERE id = $1 AND artist_id = $2
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+`
+
+type TouchScheduleEmailedAtParams struct {
+	ID       uuid.UUID `json:"id"`
+	ArtistID uuid.UUID `json:"artist_id"`
+}
+
+func (q *Queries) TouchScheduleEmailedAt(ctx context.Context, arg TouchScheduleEmailedAtParams) (BookingRequest, error) {
+	row := q.db.QueryRow(ctx, touchScheduleEmailedAt, arg.ID, arg.ArtistID)
+	var i BookingRequest
+	err := row.Scan(
+		&i.ID,
+		&i.ArtistID,
+		&i.OpenBookID,
+		&i.Type,
+		&i.FlashID,
+		&i.Description,
+		&i.ReferenceImageKeys,
+		&i.Placement,
+		&i.ApproxSizeInches,
+		&i.ClientAvailability,
+		&i.ClientName,
+		&i.ClientEmail,
+		&i.ClientPhone,
+		&i.Status,
+		&i.DepositStatus,
+		&i.WaiverStatus,
+		&i.SessionDurationMinutes,
+		&i.ClientUserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DecidedAt,
+		&i.Styles,
+		&i.CustomAnswers,
+		&i.ColorType,
+		&i.LocationID,
+		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
 	)
 	return i, err
 }
@@ -382,7 +586,7 @@ SET status                   = $1::text,
     decided_at               = now(),
     updated_at               = now()
 WHERE id = $4 AND artist_id = $5
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
 `
 
 type UpdateBookingRequestStatusParams struct {
@@ -429,6 +633,9 @@ func (q *Queries) UpdateBookingRequestStatus(ctx context.Context, arg UpdateBook
 		&i.ColorType,
 		&i.LocationID,
 		&i.FlashSizeCode,
+		&i.ScheduleToken,
+		&i.ScheduleEmailedAt,
+		&i.DepositAmountCents,
 	)
 	return i, err
 }
