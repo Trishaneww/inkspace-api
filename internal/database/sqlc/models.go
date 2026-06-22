@@ -29,11 +29,16 @@ type Appointment struct {
 }
 
 type Artist struct {
-	ID          uuid.UUID          `json:"id"`
-	UserID      uuid.UUID          `json:"user_id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	OnboardedAt pgtype.Timestamptz `json:"onboarded_at"`
+	ID                            uuid.UUID          `json:"id"`
+	UserID                        uuid.UUID          `json:"user_id"`
+	CreatedAt                     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                     pgtype.Timestamptz `json:"updated_at"`
+	OnboardedAt                   pgtype.Timestamptz `json:"onboarded_at"`
+	StripeCustomerID              *string            `json:"stripe_customer_id"`
+	StripeSubscriptionID          *string            `json:"stripe_subscription_id"`
+	SubscriptionStatus            string             `json:"subscription_status"`
+	SubscriptionCurrentPeriodEnd  pgtype.Timestamptz `json:"subscription_current_period_end"`
+	SubscriptionCancelAtPeriodEnd bool               `json:"subscription_cancel_at_period_end"`
 }
 
 type ArtistAvailabilityWindow struct {

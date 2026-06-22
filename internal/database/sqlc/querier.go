@@ -65,6 +65,7 @@ type Querier interface {
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error)
+	GetArtistByStripeCustomerID(ctx context.Context, stripeCustomerID *string) (Artist, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
 	GetArtistContact(ctx context.Context, id uuid.UUID) (GetArtistContactRow, error)
 	GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (GetArtistEarningsRow, error)
@@ -147,6 +148,7 @@ type Querier interface {
 	SeedMarkPaymentPaid(ctx context.Context, arg SeedMarkPaymentPaidParams) error
 	SetAppointmentCalendarEvent(ctx context.Context, arg SetAppointmentCalendarEventParams) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
+	SetArtistStripeCustomerID(ctx context.Context, arg SetArtistStripeCustomerIDParams) error
 	SetBookingDepositAmount(ctx context.Context, arg SetBookingDepositAmountParams) error
 	SetBookingDepositStatus(ctx context.Context, arg SetBookingDepositStatusParams) error
 	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
@@ -163,6 +165,7 @@ type Querier interface {
 	UpdateAppointmentStatus(ctx context.Context, arg UpdateAppointmentStatusParams) (Appointment, error)
 	UpdateArtistLocation(ctx context.Context, arg UpdateArtistLocationParams) (ArtistLocation, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
+	UpdateArtistSubscription(ctx context.Context, arg UpdateArtistSubscriptionParams) error
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)
 	UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) (OpenBook, error)

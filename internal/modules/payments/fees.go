@@ -6,11 +6,12 @@ import (
 )
 
 const (
-	PlatformFeePercent        = 0.06
-	PlatformFeeMinCents int64 = 200
-	MinChargeCents      int64 = 1000
-	PayLinkTTL                = 7 * 24 * time.Hour
-	ResendCooldown            = 15 * time.Minute
+	StandardPlatformFeePercent       = 0.06
+	PremiumPlatformFeePercent        = 0.05
+	PlatformFeeMinCents        int64 = 200
+	MinChargeCents             int64 = 1000
+	PayLinkTTL                       = 7 * 24 * time.Hour
+	ResendCooldown                   = 15 * time.Minute
 )
 
 type FeeBreakdown struct {
@@ -19,8 +20,12 @@ type FeeBreakdown struct {
 	ClientChargeCents int64
 }
 
-func computeFee(amountCents int64, feePayer string) FeeBreakdown {
-	fee := max(int64(math.Round(float64(amountCents)*PlatformFeePercent)), PlatformFeeMinCents)
+func computeFee(amountCents int64, feePayer string, premium bool) FeeBreakdown {
+	rate := StandardPlatformFeePercent
+	if premium {
+		rate = PremiumPlatformFeePercent
+	}
+	fee := max(int64(math.Round(float64(amountCents)*rate)), PlatformFeeMinCents)
 
 	var clientCharge int64
 	switch feePayer {

@@ -20,6 +20,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
 	"github.com/trishaneupnexx/inkspace-api/internal/email"
+	"github.com/trishaneupnexx/inkspace-api/internal/subscription"
 )
 
 var (
@@ -139,7 +140,7 @@ func (s *service) CreatePaymentRequest(ctx context.Context, userID, bookingID uu
 		return PaymentRequest{}, ErrAlreadyRequested
 	}
 
-	fee := computeFee(net, settings.PlatformFeePayer)
+	fee := computeFee(net, settings.PlatformFeePayer, subscription.IsPremium(artist.SubscriptionStatus))
 	token, err := newPublicToken()
 	if err != nil {
 		return PaymentRequest{}, err
