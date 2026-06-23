@@ -128,6 +128,10 @@ type ArtistSetting struct {
 	Faqs                       []byte             `json:"faqs"`
 	CurrentLocationID          pgtype.UUID        `json:"current_location_id"`
 	MonthlyBookingGoal         int32              `json:"monthly_booking_goal"`
+	MinSessionPriceCents       *int64             `json:"min_session_price_cents"`
+	DeclinedPlacements         []string           `json:"declined_placements"`
+	DeclinedStyles             []string           `json:"declined_styles"`
+	WorkSummary                string             `json:"work_summary"`
 }
 
 type BookingRequest struct {

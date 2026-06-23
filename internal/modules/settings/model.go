@@ -85,6 +85,11 @@ type ArtistSettings struct {
 	NotifyBySMS   bool `json:"notifyBySms"`
 
 	Styles []string `json:"styles"`
+
+	MinSessionPriceCents *int64   `json:"minSessionPriceCents"`
+	DeclinedPlacements   []string `json:"declinedPlacements"`
+	DeclinedStyles       []string `json:"declinedStyles"`
+	WorkSummary          string   `json:"workSummary"`
 }
 
 type FAQItem struct {
@@ -227,6 +232,12 @@ type UpdateSettingsInput struct {
 	ClearCancellationNoticeHours bool   `json:"clearCancellationNotice"`
 
 	Styles *[]string `json:"styles"`
+
+	MinSessionPriceCents *int64    `json:"minSessionPriceCents"`
+	ClearMinSessionPrice bool      `json:"clearMinSessionPrice"`
+	DeclinedPlacements   *[]string `json:"declinedPlacements"`
+	DeclinedStyles       *[]string `json:"declinedStyles"`
+	WorkSummary          *string   `json:"workSummary"`
 }
 
 type StripeConnectResponse struct {
@@ -292,6 +303,11 @@ type OnboardingInput struct {
 	MonthlyBookingGoal  *int32 `json:"monthlyBookingGoal"`
 
 	Styles []string `json:"styles"`
+
+	MinSessionPriceCents *int64   `json:"minSessionPriceCents"`
+	DeclinedPlacements   []string `json:"declinedPlacements"`
+	DeclinedStyles       []string `json:"declinedStyles"`
+	WorkSummary          string   `json:"workSummary"`
 }
 
 type OnboardingResponse struct {

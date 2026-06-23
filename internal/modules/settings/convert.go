@@ -62,9 +62,19 @@ func settingsFromRow(r sqlc.ArtistSetting) ArtistSettings {
 		NotifyByEmail:           r.NotifyByEmail,
 		NotifyBySMS:             r.NotifyBySMS,
 		Styles:                  r.Styles,
+		MinSessionPriceCents:    r.MinSessionPriceCents,
+		DeclinedPlacements:      r.DeclinedPlacements,
+		DeclinedStyles:          r.DeclinedStyles,
+		WorkSummary:             r.WorkSummary,
 	}
 	if out.Styles == nil {
 		out.Styles = []string{}
+	}
+	if out.DeclinedPlacements == nil {
+		out.DeclinedPlacements = []string{}
+	}
+	if out.DeclinedStyles == nil {
+		out.DeclinedStyles = []string{}
 	}
 	if r.GoogleCalendarEmail != nil && *r.GoogleCalendarEmail != "" {
 		out.GoogleCalendarConnected = true

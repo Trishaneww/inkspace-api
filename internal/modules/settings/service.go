@@ -365,11 +365,15 @@ func (s *service) CompleteOnboarding(ctx context.Context, userID uuid.UUID, inpu
 			goal = nil
 		}
 		if _, err := tx.UpdateArtistSettings(ctx, sqlc.UpdateArtistSettingsParams{
-			ArtistID:            artist.ID,
-			Timezone:            trimmedPtr(&input.Timezone),
-			DepositFlatFeeCents: input.DepositFlatFeeCents,
-			MonthlyBookingGoal:  goal,
-			Styles:              input.Styles,
+			ArtistID:             artist.ID,
+			Timezone:             trimmedPtr(&input.Timezone),
+			DepositFlatFeeCents:  input.DepositFlatFeeCents,
+			MonthlyBookingGoal:   goal,
+			Styles:               input.Styles,
+			MinSessionPriceCents: input.MinSessionPriceCents,
+			DeclinedStyles:       input.DeclinedStyles,
+			DeclinedPlacements:   input.DeclinedPlacements,
+			WorkSummary:          trimmedPtr(&input.WorkSummary),
 		}); err != nil {
 			return err
 		}
@@ -648,6 +652,9 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 		ClearWaiverFile:              input.ClearWaiverFile,
 		CancellationNoticeHours:      input.CancellationNoticeHours,
 		ClearCancellationNoticeHours: input.ClearCancellationNoticeHours,
+		MinSessionPriceCents:         input.MinSessionPriceCents,
+		ClearMinSessionPrice:         input.ClearMinSessionPrice,
+		WorkSummary:                  trimmedPtr(input.WorkSummary),
 	}
 
 	if input.PayoutFrequency != nil {
@@ -689,6 +696,15 @@ func (s *service) UpdateSettings(ctx context.Context, userID uuid.UUID, input Up
 			return ArtistSettings{}, fmt.Errorf("%w: unknown tattoo style", ErrInvalidInput)
 		}
 		params.Styles = *input.Styles
+	}
+	if input.DeclinedStyles != nil {
+		if !allValidStyles(*input.DeclinedStyles) {
+			return ArtistSettings{}, fmt.Errorf("%w: unknown tattoo style", ErrInvalidInput)
+		}
+		params.DeclinedStyles = *input.DeclinedStyles
+	}
+	if input.DeclinedPlacements != nil {
+		params.DeclinedPlacements = *input.DeclinedPlacements
 	}
 	if input.FAQs != nil {
 		faqs := make([]FAQItem, 0, len(*input.FAQs))
