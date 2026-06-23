@@ -13,6 +13,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/bookings"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/dashboard"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/flashes"
+	"github.com/trishaneupnexx/inkspace-api/internal/modules/messaging"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/openbook"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/payments"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/portfolios"
@@ -36,6 +37,12 @@ func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pu
 	paymentsModule.RegisterRoutes(api)
 
 	subscriptions.New(cfg, db).RegisterRoutes(api)
-	openbook.New(cfg, db, s3).RegisterRoutes(api)
+
+	messagingModule := messaging.New(cfg, db, pub, rdb)
+	openbookModule := openbook.New(cfg, db, s3)
+	openbookModule.Service.SetConversationCreator(messagingModule.Service)
+	messagingModule.RegisterRoutes(api)
+	openbookModule.RegisterRoutes(api)
+
 	dashboard.New(cfg, db).RegisterRoutes(api)
 }

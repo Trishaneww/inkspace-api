@@ -162,6 +162,21 @@ type BookingRequest struct {
 	DepositAmountCents     *int64             `json:"deposit_amount_cents"`
 }
 
+type Conversation struct {
+	ID                uuid.UUID          `json:"id"`
+	ArtistID          uuid.UUID          `json:"artist_id"`
+	BookingRequestID  uuid.UUID          `json:"booking_request_id"`
+	ClientName        string             `json:"client_name"`
+	ClientEmail       string             `json:"client_email"`
+	ClientAccessToken string             `json:"client_access_token"`
+	Status            string             `json:"status"`
+	LastMessageAt     pgtype.Timestamptz `json:"last_message_at"`
+	ArtistLastReadAt  pgtype.Timestamptz `json:"artist_last_read_at"`
+	ClientLastReadAt  pgtype.Timestamptz `json:"client_last_read_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Flash struct {
 	ID                  uuid.UUID          `json:"id"`
 	ArtistID            uuid.UUID          `json:"artist_id"`
@@ -193,6 +208,16 @@ type FlashPricingTier struct {
 	SizeCode        string    `json:"size_code"`
 	DurationMinutes int32     `json:"duration_minutes"`
 	PriceCents      int64     `json:"price_cents"`
+}
+
+type Message struct {
+	ID             uuid.UUID          `json:"id"`
+	ConversationID uuid.UUID          `json:"conversation_id"`
+	SenderType     string             `json:"sender_type"`
+	SenderUserID   pgtype.UUID        `json:"sender_user_id"`
+	Body           string             `json:"body"`
+	AiDrafted      bool               `json:"ai_drafted"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type OpenBook struct {
