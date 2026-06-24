@@ -102,7 +102,30 @@ func (s *service) ListInquiries(ctx context.Context, userID uuid.UUID) (InquiryL
 	s.attachLocations(ctx, artist.ID, inquiries)
 	s.attachAppointments(ctx, artist.ID, inquiries)
 	s.attachPaymentRequests(ctx, artist.ID, inquiries)
+	s.attachConversations(ctx, artist.ID, inquiries)
 	return InquiryListResponse{Inquiries: inquiries, Stats: statsFromRow(statsRow)}, nil
+}
+
+func (s *service) attachConversations(ctx context.Context, artistID uuid.UUID, inquiries []Inquiry) {
+	flags, err := s.repo.ListConversationFlagsForArtist(ctx, artistID)
+	if err != nil || len(flags) == 0 {
+		return
+	}
+	type convFlag struct {
+		id      string
+		replied bool
+	}
+	byEmail := make(map[string]convFlag, len(flags))
+	for _, f := range flags {
+		byEmail[strings.ToLower(f.ClientEmail)] = convFlag{id: f.ID.String(), replied: f.ArtistReplied}
+	}
+	for i := range inquiries {
+		if cf, ok := byEmail[strings.ToLower(inquiries[i].ClientEmail)]; ok {
+			id := cf.id
+			inquiries[i].ConversationID = &id
+			inquiries[i].ArtistReplied = cf.replied
+		}
+	}
 }
 
 func (s *service) ListClientInquiries(ctx context.Context, userID uuid.UUID) (ClientInquiryListResponse, error) {

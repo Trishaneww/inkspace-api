@@ -43,10 +43,15 @@ type Service interface {
 	PresignReferenceUpload(ctx context.Context, slug, contentType string) (PresignReferenceResult, error)
 	CreateRequest(ctx context.Context, slug string, input CreateRequestInput) (CreateRequestResult, error)
 	SetConversationCreator(c ConversationCreator)
+	SetTriageRequester(t TriageRequester)
 }
 
 type ConversationCreator interface {
 	CreateConversationForBooking(ctx context.Context, artistID, bookingID uuid.UUID, clientName, clientEmail string) (sqlc.Conversation, error)
+}
+
+type TriageRequester interface {
+	RequestTriage(ctx context.Context, bookingRequestID uuid.UUID) error
 }
 
 type service struct {
@@ -54,6 +59,7 @@ type service struct {
 	s3                  *s3client.Client
 	log                 *slog.Logger
 	conversationCreator ConversationCreator
+	triageRequester     TriageRequester
 }
 
 func NewService(repo Repository, s3 *s3client.Client) Service {
@@ -62,6 +68,10 @@ func NewService(repo Repository, s3 *s3client.Client) Service {
 
 func (s *service) SetConversationCreator(c ConversationCreator) {
 	s.conversationCreator = c
+}
+
+func (s *service) SetTriageRequester(t TriageRequester) {
+	s.triageRequester = t
 }
 
 type bookable struct {
@@ -206,6 +216,12 @@ func (s *service) CreateRequest(ctx context.Context, slug string, input CreateRe
 	if s.conversationCreator != nil {
 		if _, err := s.conversationCreator.CreateConversationForBooking(ctx, b.artist.ID, row.ID, row.ClientName, row.ClientEmail); err != nil {
 			s.log.Warn("conversation_create_failed", "booking_request_id", row.ID, "error", err)
+		}
+	}
+
+	if s.triageRequester != nil {
+		if err := s.triageRequester.RequestTriage(ctx, row.ID); err != nil {
+			s.log.Warn("triage_request_failed", "booking_request_id", row.ID, "error", err)
 		}
 	}
 

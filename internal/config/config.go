@@ -66,6 +66,8 @@ type Config struct {
 	StripePremiumPriceID            string
 
 	InternalEmailSecret string
+
+	AnthropicAPIKey string
 }
 
 func Load() (*Config, error) {
@@ -119,6 +121,8 @@ func Load() (*Config, error) {
 		StripePremiumPriceID:            os.Getenv("STRIPE_PREMIUM_PRICE_ID"),
 
 		InternalEmailSecret: os.Getenv("INTERNAL_EMAIL_SECRET"),
+
+		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
 	}
 
 	if cfg.DatabaseURL == "" {

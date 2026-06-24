@@ -9,6 +9,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/aitriage"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/auth"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/bookings"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/dashboard"
@@ -41,6 +42,7 @@ func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pu
 	messagingModule := messaging.New(cfg, db, pub, rdb)
 	openbookModule := openbook.New(cfg, db, s3)
 	openbookModule.Service.SetConversationCreator(messagingModule.Service)
+	openbookModule.Service.SetTriageRequester(aitriage.NewPublisher(pub))
 	messagingModule.RegisterRoutes(api)
 	openbookModule.RegisterRoutes(api)
 

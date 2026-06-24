@@ -164,6 +164,16 @@ type BookingRequest struct {
 	ScheduleToken          *string            `json:"schedule_token"`
 	ScheduleEmailedAt      pgtype.Timestamptz `json:"schedule_emailed_at"`
 	DepositAmountCents     *int64             `json:"deposit_amount_cents"`
+	AiStatus               string             `json:"ai_status"`
+	AiLabel                *string            `json:"ai_label"`
+	AiSummary              string             `json:"ai_summary"`
+	AiSignals              []byte             `json:"ai_signals"`
+	AiRedFlags             []byte             `json:"ai_red_flags"`
+	AiReasoning            string             `json:"ai_reasoning"`
+	AiValueCents           *int64             `json:"ai_value_cents"`
+	AiSessionCount         *int32             `json:"ai_session_count"`
+	AiDraftReply           string             `json:"ai_draft_reply"`
+	AiUpdatedAt            pgtype.Timestamptz `json:"ai_updated_at"`
 }
 
 type Conversation struct {

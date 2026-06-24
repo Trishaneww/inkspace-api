@@ -10,6 +10,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/aitriage"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database"
 	"github.com/trishaneupnexx/inkspace-api/internal/email"
@@ -83,6 +84,7 @@ func main() {
 	go reminders.New(db, smsSender, emailClient, cfg.FrontendURL, log, reminderInterval).Run(ctx)
 	go holds.New(db, emailClient, log, holdSweepInterval).Run(ctx)
 	go messagingnotify.Run(ctx, cfg.RabbitMQURL, db, emailClient, cfg.FrontendURL, log)
+	go aitriage.Run(ctx, cfg.RabbitMQURL, db, s3, cfg.AnthropicAPIKey, log)
 
 	go func() {
 		if err := srv.Start(); err != nil {

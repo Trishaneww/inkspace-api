@@ -189,6 +189,44 @@ func (q *Queries) GetOrCreateConversation(ctx context.Context, arg GetOrCreateCo
 	return i, err
 }
 
+const listConversationFlagsForArtist = `-- name: ListConversationFlagsForArtist :many
+SELECT
+    c.id,
+    c.client_email,
+    EXISTS(
+        SELECT 1 FROM messages m
+        WHERE m.conversation_id = c.id AND m.sender_type = 'artist'
+    )::boolean AS artist_replied
+FROM conversations c
+WHERE c.artist_id = $1
+`
+
+type ListConversationFlagsForArtistRow struct {
+	ID            uuid.UUID `json:"id"`
+	ClientEmail   string    `json:"client_email"`
+	ArtistReplied bool      `json:"artist_replied"`
+}
+
+func (q *Queries) ListConversationFlagsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListConversationFlagsForArtistRow, error) {
+	rows, err := q.db.Query(ctx, listConversationFlagsForArtist, artistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListConversationFlagsForArtistRow
+	for rows.Next() {
+		var i ListConversationFlagsForArtistRow
+		if err := rows.Scan(&i.ID, &i.ClientEmail, &i.ArtistReplied); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConversationsForArtist = `-- name: ListConversationsForArtist :many
 SELECT
     c.id, c.artist_id, c.booking_request_id, c.client_name, c.client_email, c.client_access_token, c.status, c.last_message_at, c.artist_last_read_at, c.client_last_read_at, c.created_at, c.updated_at,

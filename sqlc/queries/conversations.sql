@@ -20,6 +20,17 @@ SELECT * FROM conversations WHERE id = $1;
 -- name: GetBookingRequestPhone :one
 SELECT client_phone FROM booking_requests WHERE id = $1;
 
+-- name: ListConversationFlagsForArtist :many
+SELECT
+    c.id,
+    c.client_email,
+    EXISTS(
+        SELECT 1 FROM messages m
+        WHERE m.conversation_id = c.id AND m.sender_type = 'artist'
+    )::boolean AS artist_replied
+FROM conversations c
+WHERE c.artist_id = $1;
+
 -- name: ListConversationsForArtist :many
 SELECT
     c.*,

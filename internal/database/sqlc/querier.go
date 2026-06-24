@@ -78,6 +78,7 @@ type Querier interface {
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
 	GetBookingMixForRange(ctx context.Context, arg GetBookingMixForRangeParams) (GetBookingMixForRangeRow, error)
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
+	GetBookingRequestByID(ctx context.Context, id uuid.UUID) (BookingRequest, error)
 	GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (BookingRequest, error)
 	GetBookingRequestPhone(ctx context.Context, id uuid.UUID) (string, error)
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
@@ -121,6 +122,7 @@ type Querier interface {
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error)
 	ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]BookingRequest, error)
 	ListBusyAppointmentsByArtistInRange(ctx context.Context, arg ListBusyAppointmentsByArtistInRangeParams) ([]ListBusyAppointmentsByArtistInRangeRow, error)
+	ListConversationFlagsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListConversationFlagsForArtistRow, error)
 	ListConversationsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListConversationsForArtistRow, error)
 	ListConversationsForClient(ctx context.Context, clientEmail string) ([]ListConversationsForClientRow, error)
 	ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]ArtistDaysOff, error)
@@ -165,6 +167,7 @@ type Querier interface {
 	SetArtistStripeCustomerID(ctx context.Context, arg SetArtistStripeCustomerIDParams) error
 	SetBookingDepositAmount(ctx context.Context, arg SetBookingDepositAmountParams) error
 	SetBookingDepositStatus(ctx context.Context, arg SetBookingDepositStatusParams) error
+	SetBookingRequestTriageStatus(ctx context.Context, arg SetBookingRequestTriageStatusParams) error
 	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
 	SetDepositScheduledStart(ctx context.Context, arg SetDepositScheduledStartParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
@@ -182,6 +185,7 @@ type Querier interface {
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
 	UpdateArtistSubscription(ctx context.Context, arg UpdateArtistSubscriptionParams) error
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)
+	UpdateBookingRequestTriage(ctx context.Context, arg UpdateBookingRequestTriageParams) error
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)
 	UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) (OpenBook, error)
 	UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error)
