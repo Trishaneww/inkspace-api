@@ -24,7 +24,7 @@ func (q *Queries) EnsureArtist(ctx context.Context, userID uuid.UUID) error {
 }
 
 const getArtistByID = `-- name: GetArtistByID :one
-SELECT id, user_id, created_at, updated_at, onboarded_at FROM artists WHERE id = $1
+SELECT id, user_id, created_at, updated_at, onboarded_at, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_current_period_end, subscription_cancel_at_period_end FROM artists WHERE id = $1
 `
 
 func (q *Queries) GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error) {
@@ -36,12 +36,39 @@ func (q *Queries) GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OnboardedAt,
+		&i.StripeCustomerID,
+		&i.StripeSubscriptionID,
+		&i.SubscriptionStatus,
+		&i.SubscriptionCurrentPeriodEnd,
+		&i.SubscriptionCancelAtPeriodEnd,
+	)
+	return i, err
+}
+
+const getArtistByStripeCustomerID = `-- name: GetArtistByStripeCustomerID :one
+SELECT id, user_id, created_at, updated_at, onboarded_at, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_current_period_end, subscription_cancel_at_period_end FROM artists WHERE stripe_customer_id = $1
+`
+
+func (q *Queries) GetArtistByStripeCustomerID(ctx context.Context, stripeCustomerID *string) (Artist, error) {
+	row := q.db.QueryRow(ctx, getArtistByStripeCustomerID, stripeCustomerID)
+	var i Artist
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OnboardedAt,
+		&i.StripeCustomerID,
+		&i.StripeSubscriptionID,
+		&i.SubscriptionStatus,
+		&i.SubscriptionCurrentPeriodEnd,
+		&i.SubscriptionCancelAtPeriodEnd,
 	)
 	return i, err
 }
 
 const getArtistByUserID = `-- name: GetArtistByUserID :one
-SELECT id, user_id, created_at, updated_at, onboarded_at FROM artists WHERE user_id = $1
+SELECT id, user_id, created_at, updated_at, onboarded_at, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_current_period_end, subscription_cancel_at_period_end FROM artists WHERE user_id = $1
 `
 
 func (q *Queries) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error) {
@@ -53,6 +80,11 @@ func (q *Queries) GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Arti
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.OnboardedAt,
+		&i.StripeCustomerID,
+		&i.StripeSubscriptionID,
+		&i.SubscriptionStatus,
+		&i.SubscriptionCurrentPeriodEnd,
+		&i.SubscriptionCancelAtPeriodEnd,
 	)
 	return i, err
 }
@@ -77,5 +109,51 @@ WHERE id = $1
 
 func (q *Queries) SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, setArtistOnboardedAt, id)
+	return err
+}
+
+const setArtistStripeCustomerID = `-- name: SetArtistStripeCustomerID :exec
+UPDATE artists
+SET stripe_customer_id = $2,
+    updated_at         = now()
+WHERE id = $1
+`
+
+type SetArtistStripeCustomerIDParams struct {
+	ID               uuid.UUID `json:"id"`
+	StripeCustomerID *string   `json:"stripe_customer_id"`
+}
+
+func (q *Queries) SetArtistStripeCustomerID(ctx context.Context, arg SetArtistStripeCustomerIDParams) error {
+	_, err := q.db.Exec(ctx, setArtistStripeCustomerID, arg.ID, arg.StripeCustomerID)
+	return err
+}
+
+const updateArtistSubscription = `-- name: UpdateArtistSubscription :exec
+UPDATE artists
+SET stripe_subscription_id            = $2,
+    subscription_status               = $3,
+    subscription_current_period_end   = $4,
+    subscription_cancel_at_period_end = $5,
+    updated_at                        = now()
+WHERE id = $1
+`
+
+type UpdateArtistSubscriptionParams struct {
+	ID                            uuid.UUID          `json:"id"`
+	StripeSubscriptionID          *string            `json:"stripe_subscription_id"`
+	SubscriptionStatus            string             `json:"subscription_status"`
+	SubscriptionCurrentPeriodEnd  pgtype.Timestamptz `json:"subscription_current_period_end"`
+	SubscriptionCancelAtPeriodEnd bool               `json:"subscription_cancel_at_period_end"`
+}
+
+func (q *Queries) UpdateArtistSubscription(ctx context.Context, arg UpdateArtistSubscriptionParams) error {
+	_, err := q.db.Exec(ctx, updateArtistSubscription,
+		arg.ID,
+		arg.StripeSubscriptionID,
+		arg.SubscriptionStatus,
+		arg.SubscriptionCurrentPeriodEnd,
+		arg.SubscriptionCancelAtPeriodEnd,
+	)
 	return err
 }

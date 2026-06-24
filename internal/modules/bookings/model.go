@@ -83,6 +83,28 @@ type Inquiry struct {
 	LiveAppointments   []Appointment        `json:"liveAppointments"`
 
 	Payments []InquiryPayment `json:"payments"`
+
+	AI InquiryTriage `json:"ai"`
+
+	ConversationID *string `json:"conversationId"`
+	ArtistReplied  bool    `json:"artistReplied"`
+}
+
+type InquiryTriage struct {
+	Status       string         `json:"status"`
+	Label        *string        `json:"label"`
+	Summary      string         `json:"summary"`
+	Signals      InquirySignals `json:"signals"`
+	RedFlags     []string       `json:"redFlags"`
+	Reasoning    string         `json:"reasoning"`
+	ValueCents   *int64         `json:"valueCents"`
+	SessionCount *int32         `json:"sessionCount"`
+	DraftReply   string         `json:"draftReply"`
+}
+
+type InquirySignals struct {
+	Good []string `json:"good"`
+	Bad  []string `json:"bad"`
 }
 
 type InquiryPayment struct {
@@ -289,7 +311,38 @@ func inquiryFromRow(row sqlc.BookingRequest) Inquiry {
 		s := row.DecidedAt.Time.UTC().Format(time.RFC3339)
 		out.DecidedAt = &s
 	}
+	out.AI = triageFromRow(row)
 	return out
+}
+
+func triageFromRow(row sqlc.BookingRequest) InquiryTriage {
+	t := InquiryTriage{
+		Status:       row.AiStatus,
+		Label:        row.AiLabel,
+		Summary:      row.AiSummary,
+		Reasoning:    row.AiReasoning,
+		ValueCents:   row.AiValueCents,
+		SessionCount: row.AiSessionCount,
+		DraftReply:   row.AiDraftReply,
+		Signals:      InquirySignals{Good: []string{}, Bad: []string{}},
+		RedFlags:     []string{},
+	}
+	if len(row.AiSignals) > 0 {
+		_ = json.Unmarshal(row.AiSignals, &t.Signals)
+	}
+	if t.Signals.Good == nil {
+		t.Signals.Good = []string{}
+	}
+	if t.Signals.Bad == nil {
+		t.Signals.Bad = []string{}
+	}
+	if len(row.AiRedFlags) > 0 {
+		_ = json.Unmarshal(row.AiRedFlags, &t.RedFlags)
+	}
+	if t.RedFlags == nil {
+		t.RedFlags = []string{}
+	}
+	return t
 }
 
 func inquiryLocationFromRow(l sqlc.ArtistLocation) *InquiryLocation {

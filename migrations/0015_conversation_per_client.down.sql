@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_conversations_artist_client_email;

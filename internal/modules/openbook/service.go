@@ -42,16 +42,36 @@ type Service interface {
 	GetProfile(ctx context.Context, slug string) (Profile, error)
 	PresignReferenceUpload(ctx context.Context, slug, contentType string) (PresignReferenceResult, error)
 	CreateRequest(ctx context.Context, slug string, input CreateRequestInput) (CreateRequestResult, error)
+	SetConversationCreator(c ConversationCreator)
+	SetTriageRequester(t TriageRequester)
+}
+
+type ConversationCreator interface {
+	CreateConversationForBooking(ctx context.Context, artistID, bookingID uuid.UUID, clientName, clientEmail string) (sqlc.Conversation, error)
+}
+
+type TriageRequester interface {
+	RequestTriage(ctx context.Context, bookingRequestID uuid.UUID) error
 }
 
 type service struct {
-	repo Repository
-	s3   *s3client.Client
-	log  *slog.Logger
+	repo                Repository
+	s3                  *s3client.Client
+	log                 *slog.Logger
+	conversationCreator ConversationCreator
+	triageRequester     TriageRequester
 }
 
 func NewService(repo Repository, s3 *s3client.Client) Service {
 	return &service{repo: repo, s3: s3, log: slog.Default()}
+}
+
+func (s *service) SetConversationCreator(c ConversationCreator) {
+	s.conversationCreator = c
+}
+
+func (s *service) SetTriageRequester(t TriageRequester) {
+	s.triageRequester = t
 }
 
 type bookable struct {
@@ -193,6 +213,18 @@ func (s *service) CreateRequest(ctx context.Context, slug string, input CreateRe
 		return CreateRequestResult{}, err
 	}
 
+	if s.conversationCreator != nil {
+		if _, err := s.conversationCreator.CreateConversationForBooking(ctx, b.artist.ID, row.ID, row.ClientName, row.ClientEmail); err != nil {
+			s.log.Warn("conversation_create_failed", "booking_request_id", row.ID, "error", err)
+		}
+	}
+
+	if s.triageRequester != nil {
+		if err := s.triageRequester.RequestTriage(ctx, row.ID); err != nil {
+			s.log.Warn("triage_request_failed", "booking_request_id", row.ID, "error", err)
+		}
+	}
+
 	return CreateRequestResult{
 		ID:        row.ID.String(),
 		Status:    row.Status,
@@ -230,10 +262,7 @@ func buildCustomRequestParams(b bookable, input CreateRequestInput) (sqlc.Create
 		return empty, fmt.Errorf("%w: please describe the tattoo you want", ErrInvalidInput)
 	}
 
-	styles, err := validateStyles(input.Styles, b.settings.Styles)
-	if err != nil {
-		return empty, err
-	}
+	styles := normalizeStyles(input.Styles)
 	keys, err := validateReferenceKeys(input.ReferenceImageKeys)
 	if err != nil {
 		return empty, err
@@ -401,23 +430,18 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
-func validateStyles(selected, offered []string) ([]string, error) {
-	offeredSet := make(map[string]bool, len(offered))
-	for _, style := range offered {
-		offeredSet[style] = true
-	}
+func normalizeStyles(selected []string) []string {
+	seen := make(map[string]bool, len(selected))
 	out := make([]string, 0, len(selected))
 	for _, style := range selected {
 		style = strings.TrimSpace(style)
-		if style == "" {
+		if style == "" || seen[style] {
 			continue
 		}
-		if !offeredSet[style] {
-			return nil, fmt.Errorf("%w: %q isn't a style this artist offers", ErrInvalidInput, style)
-		}
+		seen[style] = true
 		out = append(out, style)
 	}
-	return out, nil
+	return out
 }
 
 func validateReferenceKeys(keys []string) ([]string, error) {

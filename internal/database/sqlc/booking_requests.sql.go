@@ -24,7 +24,7 @@ INSERT INTO booking_requests (
     $14, $15, $16, $17, $18, $19,
     $20, $21
 )
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 `
 
 type CreateBookingRequestParams struct {
@@ -106,6 +106,16 @@ func (q *Queries) CreateBookingRequest(ctx context.Context, arg CreateBookingReq
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }
@@ -133,7 +143,7 @@ func (q *Queries) DeclineOtherFlashRequests(ctx context.Context, arg DeclineOthe
 }
 
 const getBookingRequest = `-- name: GetBookingRequest :one
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 FROM booking_requests
 WHERE id = $1 AND artist_id = $2
 `
@@ -176,12 +186,22 @@ func (q *Queries) GetBookingRequest(ctx context.Context, arg GetBookingRequestPa
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }
 
 const getBookingRequestByScheduleToken = `-- name: GetBookingRequestByScheduleToken :one
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents FROM booking_requests WHERE schedule_token = $1
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at FROM booking_requests WHERE schedule_token = $1
 `
 
 func (q *Queries) GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (BookingRequest, error) {
@@ -217,6 +237,16 @@ func (q *Queries) GetBookingRequestByScheduleToken(ctx context.Context, schedule
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }
@@ -247,7 +277,7 @@ func (q *Queries) GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetB
 }
 
 const getClientBookingRequest = `-- name: GetClientBookingRequest :one
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents FROM booking_requests WHERE id = $1 AND client_email = $2
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at FROM booking_requests WHERE id = $1 AND client_email = $2
 `
 
 type GetClientBookingRequestParams struct {
@@ -288,6 +318,16 @@ func (q *Queries) GetClientBookingRequest(ctx context.Context, arg GetClientBook
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }
@@ -311,7 +351,7 @@ func (q *Queries) LinkBookingRequestsToClient(ctx context.Context, arg LinkBooki
 }
 
 const listBookingRequestsByArtist = `-- name: ListBookingRequestsByArtist :many
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 FROM booking_requests
 WHERE artist_id = $1
 ORDER BY created_at DESC
@@ -356,6 +396,16 @@ func (q *Queries) ListBookingRequestsByArtist(ctx context.Context, artistID uuid
 			&i.ScheduleToken,
 			&i.ScheduleEmailedAt,
 			&i.DepositAmountCents,
+			&i.AiStatus,
+			&i.AiLabel,
+			&i.AiSummary,
+			&i.AiSignals,
+			&i.AiRedFlags,
+			&i.AiReasoning,
+			&i.AiValueCents,
+			&i.AiSessionCount,
+			&i.AiDraftReply,
+			&i.AiUpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -368,7 +418,7 @@ func (q *Queries) ListBookingRequestsByArtist(ctx context.Context, artistID uuid
 }
 
 const listBookingRequestsByClientEmail = `-- name: ListBookingRequestsByClientEmail :many
-SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+SELECT id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 FROM booking_requests
 WHERE client_email = $1
 ORDER BY created_at DESC
@@ -413,6 +463,16 @@ func (q *Queries) ListBookingRequestsByClientEmail(ctx context.Context, clientEm
 			&i.ScheduleToken,
 			&i.ScheduleEmailedAt,
 			&i.DepositAmountCents,
+			&i.AiStatus,
+			&i.AiLabel,
+			&i.AiSummary,
+			&i.AiSignals,
+			&i.AiRedFlags,
+			&i.AiReasoning,
+			&i.AiValueCents,
+			&i.AiSessionCount,
+			&i.AiDraftReply,
+			&i.AiUpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -431,7 +491,7 @@ SET status         = 'pending',
     decided_at     = NULL,
     updated_at     = now()
 WHERE id = $1 AND artist_id = $2
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 `
 
 type ReopenBookingRequestParams struct {
@@ -472,6 +532,16 @@ func (q *Queries) ReopenBookingRequest(ctx context.Context, arg ReopenBookingReq
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }
@@ -482,7 +552,7 @@ SET schedule_token      = $1::text,
     schedule_emailed_at = now(),
     updated_at          = now()
 WHERE id = $2 AND artist_id = $3
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 `
 
 type SetScheduleTokenParams struct {
@@ -524,6 +594,16 @@ func (q *Queries) SetScheduleToken(ctx context.Context, arg SetScheduleTokenPara
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }
@@ -533,7 +613,7 @@ UPDATE booking_requests
 SET schedule_emailed_at = now(),
     updated_at          = now()
 WHERE id = $1 AND artist_id = $2
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 `
 
 type TouchScheduleEmailedAtParams struct {
@@ -574,6 +654,16 @@ func (q *Queries) TouchScheduleEmailedAt(ctx context.Context, arg TouchScheduleE
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }
@@ -586,7 +676,7 @@ SET status                   = $1::text,
     decided_at               = now(),
     updated_at               = now()
 WHERE id = $4 AND artist_id = $5
-RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents
+RETURNING id, artist_id, open_book_id, type, flash_id, description, reference_image_keys, placement, approx_size_inches, client_availability, client_name, client_email, client_phone, status, deposit_status, waiver_status, session_duration_minutes, client_user_id, created_at, updated_at, decided_at, styles, custom_answers, color_type, location_id, flash_size_code, schedule_token, schedule_emailed_at, deposit_amount_cents, ai_status, ai_label, ai_summary, ai_signals, ai_red_flags, ai_reasoning, ai_value_cents, ai_session_count, ai_draft_reply, ai_updated_at
 `
 
 type UpdateBookingRequestStatusParams struct {
@@ -636,6 +726,16 @@ func (q *Queries) UpdateBookingRequestStatus(ctx context.Context, arg UpdateBook
 		&i.ScheduleToken,
 		&i.ScheduleEmailedAt,
 		&i.DepositAmountCents,
+		&i.AiStatus,
+		&i.AiLabel,
+		&i.AiSummary,
+		&i.AiSignals,
+		&i.AiRedFlags,
+		&i.AiReasoning,
+		&i.AiValueCents,
+		&i.AiSessionCount,
+		&i.AiDraftReply,
+		&i.AiUpdatedAt,
 	)
 	return i, err
 }

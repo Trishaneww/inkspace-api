@@ -49,8 +49,15 @@ SET payout_frequency       = COALESCE(sqlc.narg('payout_frequency')::text,      
     aftercare              = COALESCE(sqlc.narg('aftercare')::text,              aftercare),
     faqs                   = COALESCE(sqlc.narg('faqs')::jsonb,                  faqs),
     monthly_booking_goal   = COALESCE(sqlc.narg('monthly_booking_goal')::integer, monthly_booking_goal),
+    declined_placements    = COALESCE(sqlc.narg('declined_placements')::text[], declined_placements),
+    declined_styles        = COALESCE(sqlc.narg('declined_styles')::text[],     declined_styles),
+    work_summary           = COALESCE(sqlc.narg('work_summary')::text,          work_summary),
 
     -- Nullable fields support explicit clearing via a paired boolean.
+    min_session_price_cents = CASE
+                                 WHEN @clear_min_session_price::boolean THEN NULL
+                                 ELSE COALESCE(sqlc.narg('min_session_price_cents')::bigint, min_session_price_cents)
+                             END,
     deposit_flat_fee_cents = CASE
                                  WHEN @clear_deposit_flat_fee::boolean THEN NULL
                                  ELSE COALESCE(sqlc.narg('deposit_flat_fee_cents')::bigint, deposit_flat_fee_cents)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/aitriage"
 	"github.com/trishaneupnexx/inkspace-api/internal/config"
 	"github.com/trishaneupnexx/inkspace-api/internal/database"
 	"github.com/trishaneupnexx/inkspace-api/internal/email"
@@ -17,6 +18,7 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/holds"
 	"github.com/trishaneupnexx/inkspace-api/internal/maintenance"
 	"github.com/trishaneupnexx/inkspace-api/internal/messaging"
+	"github.com/trishaneupnexx/inkspace-api/internal/messagingnotify"
 	"github.com/trishaneupnexx/inkspace-api/internal/redisclient"
 	"github.com/trishaneupnexx/inkspace-api/internal/reminders"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
@@ -81,6 +83,8 @@ func main() {
 	emailClient := email.NewClient(cfg.FrontendURL, cfg.InternalEmailSecret, log)
 	go reminders.New(db, smsSender, emailClient, cfg.FrontendURL, log, reminderInterval).Run(ctx)
 	go holds.New(db, emailClient, log, holdSweepInterval).Run(ctx)
+	go messagingnotify.Run(ctx, cfg.RabbitMQURL, db, emailClient, cfg.FrontendURL, log)
+	go aitriage.Run(ctx, cfg.RabbitMQURL, db, s3, cfg.AnthropicAPIKey, log)
 
 	go func() {
 		if err := srv.Start(); err != nil {

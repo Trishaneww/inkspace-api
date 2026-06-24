@@ -9,14 +9,17 @@ import (
 	"github.com/trishaneupnexx/inkspace-api/internal/events"
 	"github.com/trishaneupnexx/inkspace-api/internal/s3client"
 
+	"github.com/trishaneupnexx/inkspace-api/internal/aitriage"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/auth"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/bookings"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/dashboard"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/flashes"
+	"github.com/trishaneupnexx/inkspace-api/internal/modules/messaging"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/openbook"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/payments"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/portfolios"
 	"github.com/trishaneupnexx/inkspace-api/internal/modules/settings"
+	"github.com/trishaneupnexx/inkspace-api/internal/modules/subscriptions"
 )
 
 func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pub *events.Publisher, s3 *s3client.Client, rdb *redis.Client) {
@@ -34,6 +37,14 @@ func registerRoutes(engine *gin.Engine, cfg *config.Config, db *pgxpool.Pool, pu
 	bookingsModule.RegisterRoutes(api)
 	paymentsModule.RegisterRoutes(api)
 
-	openbook.New(cfg, db, s3).RegisterRoutes(api)
+	subscriptions.New(cfg, db).RegisterRoutes(api)
+
+	messagingModule := messaging.New(cfg, db, pub, rdb)
+	openbookModule := openbook.New(cfg, db, s3)
+	openbookModule.Service.SetConversationCreator(messagingModule.Service)
+	openbookModule.Service.SetTriageRequester(aitriage.NewPublisher(pub))
+	messagingModule.RegisterRoutes(api)
+	openbookModule.RegisterRoutes(api)
+
 	dashboard.New(cfg, db).RegisterRoutes(api)
 }

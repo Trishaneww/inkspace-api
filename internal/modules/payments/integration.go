@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/trishaneupnexx/inkspace-api/internal/database/sqlc"
+	"github.com/trishaneupnexx/inkspace-api/internal/subscription"
 )
 
 const depositHoldTTL = 48 * time.Hour
@@ -32,6 +33,11 @@ func (s *service) CreateDepositRequest(ctx context.Context, artistID, bookingID 
 		return "", ErrAmountTooLow
 	}
 
+	artist, err := s.repo.GetArtistByID(ctx, artistID)
+	if err != nil {
+		return "", err
+	}
+
 	settings, err := s.repo.GetArtistSettings(ctx, artistID)
 	if err != nil {
 		return "", err
@@ -48,7 +54,7 @@ func (s *service) CreateDepositRequest(ctx context.Context, artistID, bookingID 
 		return "", err
 	}
 
-	fee := computeFee(amountCents, settings.PlatformFeePayer)
+	fee := computeFee(amountCents, settings.PlatformFeePayer, subscription.IsPremium(artist.SubscriptionStatus))
 	token, err := newPublicToken()
 	if err != nil {
 		return "", err

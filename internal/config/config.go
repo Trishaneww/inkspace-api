@@ -59,11 +59,15 @@ type Config struct {
 	AWSSecretAccessKey string
 	AWSS3Bucket        string
 
-	StripeSecretKey             string
-	StripeWebhookSecret         string
-	StripePaymentsWebhookSecret string
+	StripeSecretKey                 string
+	StripeWebhookSecret             string
+	StripePaymentsWebhookSecret     string
+	StripeSubscriptionWebhookSecret string
+	StripePremiumPriceID            string
 
 	InternalEmailSecret string
+
+	AnthropicAPIKey string
 }
 
 func Load() (*Config, error) {
@@ -110,11 +114,15 @@ func Load() (*Config, error) {
 		AWSSecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
 		AWSS3Bucket:        os.Getenv("AWS_S3_BUCKET"),
 
-		StripeSecretKey:             os.Getenv("STRIPE_SECRET_KEY"),
-		StripeWebhookSecret:         os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		StripePaymentsWebhookSecret: os.Getenv("STRIPE_PAYMENTS_WEBHOOK_SECRET"),
+		StripeSecretKey:                 os.Getenv("STRIPE_SECRET_KEY"),
+		StripeWebhookSecret:             os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		StripePaymentsWebhookSecret:     os.Getenv("STRIPE_PAYMENTS_WEBHOOK_SECRET"),
+		StripeSubscriptionWebhookSecret: os.Getenv("STRIPE_SUBSCRIPTION_WEBHOOK_SECRET"),
+		StripePremiumPriceID:            os.Getenv("STRIPE_PREMIUM_PRICE_ID"),
 
 		InternalEmailSecret: os.Getenv("INTERNAL_EMAIL_SECRET"),
+
+		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
 	}
 
 	if cfg.DatabaseURL == "" {

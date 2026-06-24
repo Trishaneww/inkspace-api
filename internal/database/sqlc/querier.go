@@ -37,11 +37,13 @@ type Querier interface {
 	// A non-expired deposit hold blocks the slot; an expired hold does not.
 	CountOverlappingAppointments(ctx context.Context, arg CountOverlappingAppointmentsParams) (int64, error)
 	CountPortfolioItemsByArtist(ctx context.Context, arg CountPortfolioItemsByArtistParams) (CountPortfolioItemsByArtistRow, error)
+	CountPriorUnreadFromSender(ctx context.Context, arg CountPriorUnreadFromSenderParams) (int64, error)
 	CreateAppointment(ctx context.Context, arg CreateAppointmentParams) (Appointment, error)
 	CreateArtistLocation(ctx context.Context, arg CreateArtistLocationParams) (ArtistLocation, error)
 	CreateAvailabilityWindow(ctx context.Context, arg CreateAvailabilityWindowParams) (ArtistAvailabilityWindow, error)
 	CreateBookingRequest(ctx context.Context, arg CreateBookingRequestParams) (BookingRequest, error)
 	CreateFlash(ctx context.Context, arg CreateFlashParams) (Flash, error)
+	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateOpenBook(ctx context.Context, arg CreateOpenBookParams) (OpenBook, error)
 	CreatePaymentRequest(ctx context.Context, arg CreatePaymentRequestParams) (PaymentRequest, error)
 	CreatePhoneVerification(ctx context.Context, arg CreatePhoneVerificationParams) (PhoneVerification, error)
@@ -65,8 +67,10 @@ type Querier interface {
 	GetActivePhoneVerification(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	GetActiveRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetArtistByID(ctx context.Context, id uuid.UUID) (Artist, error)
+	GetArtistByStripeCustomerID(ctx context.Context, stripeCustomerID *string) (Artist, error)
 	GetArtistByUserID(ctx context.Context, userID uuid.UUID) (Artist, error)
 	GetArtistContact(ctx context.Context, id uuid.UUID) (GetArtistContactRow, error)
+	GetArtistDisplayName(ctx context.Context, id uuid.UUID) (string, error)
 	GetArtistEarnings(ctx context.Context, artistID uuid.UUID) (GetArtistEarningsRow, error)
 	GetArtistLocation(ctx context.Context, arg GetArtistLocationParams) (ArtistLocation, error)
 	GetArtistOnboardedAt(ctx context.Context, userID uuid.UUID) (pgtype.Timestamptz, error)
@@ -74,15 +78,22 @@ type Querier interface {
 	GetArtistSettingsByStripeAccount(ctx context.Context, stripeAccountID *string) (ArtistSetting, error)
 	GetBookingMixForRange(ctx context.Context, arg GetBookingMixForRangeParams) (GetBookingMixForRangeRow, error)
 	GetBookingRequest(ctx context.Context, arg GetBookingRequestParams) (BookingRequest, error)
+	GetBookingRequestByID(ctx context.Context, id uuid.UUID) (BookingRequest, error)
 	GetBookingRequestByScheduleToken(ctx context.Context, scheduleToken *string) (BookingRequest, error)
+	GetBookingRequestPhone(ctx context.Context, id uuid.UUID) (string, error)
 	GetBookingStats(ctx context.Context, artistID uuid.UUID) (GetBookingStatsRow, error)
 	GetClientBookingRequest(ctx context.Context, arg GetClientBookingRequestParams) (BookingRequest, error)
+	GetConversationByID(ctx context.Context, id uuid.UUID) (Conversation, error)
+	GetConversationByToken(ctx context.Context, clientAccessToken string) (Conversation, error)
+	GetConversationForArtist(ctx context.Context, arg GetConversationForArtistParams) (Conversation, error)
+	GetConversationForClient(ctx context.Context, arg GetConversationForClientParams) (Conversation, error)
 	GetDashboardCounts(ctx context.Context, artistID uuid.UUID) (GetDashboardCountsRow, error)
 	GetFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	GetLatestAppointmentByRequest(ctx context.Context, bookingRequestID uuid.UUID) (Appointment, error)
 	GetMonthlyEarnings(ctx context.Context, arg GetMonthlyEarningsParams) ([]GetMonthlyEarningsRow, error)
 	GetOpenBookByArtist(ctx context.Context, artistID uuid.UUID) (OpenBook, error)
 	GetOpenBookBySlug(ctx context.Context, slug string) (OpenBook, error)
+	GetOrCreateConversation(ctx context.Context, arg GetOrCreateConversationParams) (Conversation, error)
 	GetPaymentRequestByPaymentIntent(ctx context.Context, stripePaymentIntentID *string) (PaymentRequest, error)
 	GetPaymentRequestByToken(ctx context.Context, publicToken string) (PaymentRequest, error)
 	GetPaymentRequestForArtist(ctx context.Context, arg GetPaymentRequestForArtistParams) (PaymentRequest, error)
@@ -111,6 +122,9 @@ type Querier interface {
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]BookingRequest, error)
 	ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]BookingRequest, error)
 	ListBusyAppointmentsByArtistInRange(ctx context.Context, arg ListBusyAppointmentsByArtistInRangeParams) ([]ListBusyAppointmentsByArtistInRangeRow, error)
+	ListConversationFlagsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListConversationFlagsForArtistRow, error)
+	ListConversationsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListConversationsForArtistRow, error)
+	ListConversationsForClient(ctx context.Context, clientEmail string) ([]ListConversationsForClientRow, error)
 	ListDaysOff(ctx context.Context, artistID uuid.UUID) ([]ArtistDaysOff, error)
 	ListFlashPricingTiers(ctx context.Context, flashID uuid.UUID) ([]FlashPricingTier, error)
 	// Batched fetch for a page of flashes, avoiding an N+1 of ListFlashPricingTiers.
@@ -121,12 +135,15 @@ type Querier interface {
 	// inbox list can show the scheduled/held/proposed state without an N+1 lookup.
 	ListLatestAppointmentsByArtist(ctx context.Context, artistID uuid.UUID) ([]Appointment, error)
 	ListLiveAppointmentsByRequest(ctx context.Context, bookingRequestID uuid.UUID) ([]Appointment, error)
+	ListMessages(ctx context.Context, conversationID uuid.UUID) ([]Message, error)
 	ListPaymentRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]PaymentRequest, error)
 	ListPaymentRequestsByBooking(ctx context.Context, bookingRequestID uuid.UUID) ([]PaymentRequest, error)
 	ListPortfolioItemsByArtist(ctx context.Context, arg ListPortfolioItemsByArtistParams) ([]PortfolioItem, error)
 	ListRecentPaidPaymentsForArtist(ctx context.Context, artistID uuid.UUID) ([]ListRecentPaidPaymentsForArtistRow, error)
 	ListSessionPresets(ctx context.Context, artistID uuid.UUID) ([]ArtistSessionPreset, error)
 	ListUpcomingAppointments(ctx context.Context, artistID uuid.UUID) ([]ListUpcomingAppointmentsRow, error)
+	MarkConversationReadByArtist(ctx context.Context, arg MarkConversationReadByArtistParams) error
+	MarkConversationReadByClient(ctx context.Context, id uuid.UUID) error
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 	MarkPaymentRequestEmailed(ctx context.Context, arg MarkPaymentRequestEmailedParams) (PaymentRequest, error)
 	MarkPaymentRequestExpiredBySession(ctx context.Context, stripeCheckoutSessionID *string) (PaymentRequest, error)
@@ -147,8 +164,10 @@ type Querier interface {
 	SeedMarkPaymentPaid(ctx context.Context, arg SeedMarkPaymentPaidParams) error
 	SetAppointmentCalendarEvent(ctx context.Context, arg SetAppointmentCalendarEventParams) error
 	SetArtistOnboardedAt(ctx context.Context, id uuid.UUID) error
+	SetArtistStripeCustomerID(ctx context.Context, arg SetArtistStripeCustomerIDParams) error
 	SetBookingDepositAmount(ctx context.Context, arg SetBookingDepositAmountParams) error
 	SetBookingDepositStatus(ctx context.Context, arg SetBookingDepositStatusParams) error
+	SetBookingRequestTriageStatus(ctx context.Context, arg SetBookingRequestTriageStatusParams) error
 	SetCurrentLocation(ctx context.Context, arg SetCurrentLocationParams) error
 	SetDepositScheduledStart(ctx context.Context, arg SetDepositScheduledStartParams) error
 	SetGoogleCalendarConnection(ctx context.Context, arg SetGoogleCalendarConnectionParams) (ArtistSetting, error)
@@ -156,6 +175,7 @@ type Querier interface {
 	SetStripeAccount(ctx context.Context, arg SetStripeAccountParams) (ArtistSetting, error)
 	SetUserMarketingOptIn(ctx context.Context, arg SetUserMarketingOptInParams) error
 	SumPaidDepositsForBooking(ctx context.Context, bookingRequestID uuid.UUID) (int64, error)
+	TouchConversationAfterSend(ctx context.Context, arg TouchConversationAfterSendParams) error
 	TouchScheduleEmailedAt(ctx context.Context, arg TouchScheduleEmailedAtParams) (BookingRequest, error)
 	UnarchiveFlash(ctx context.Context, id uuid.UUID) (Flash, error)
 	UnarchivePortfolioItem(ctx context.Context, id uuid.UUID) (PortfolioItem, error)
@@ -163,7 +183,9 @@ type Querier interface {
 	UpdateAppointmentStatus(ctx context.Context, arg UpdateAppointmentStatusParams) (Appointment, error)
 	UpdateArtistLocation(ctx context.Context, arg UpdateArtistLocationParams) (ArtistLocation, error)
 	UpdateArtistSettings(ctx context.Context, arg UpdateArtistSettingsParams) (ArtistSetting, error)
+	UpdateArtistSubscription(ctx context.Context, arg UpdateArtistSubscriptionParams) error
 	UpdateBookingRequestStatus(ctx context.Context, arg UpdateBookingRequestStatusParams) (BookingRequest, error)
+	UpdateBookingRequestTriage(ctx context.Context, arg UpdateBookingRequestTriageParams) error
 	UpdateFlash(ctx context.Context, arg UpdateFlashParams) (Flash, error)
 	UpdateOpenBook(ctx context.Context, arg UpdateOpenBookParams) (OpenBook, error)
 	UpdatePortfolioItem(ctx context.Context, arg UpdatePortfolioItemParams) (PortfolioItem, error)

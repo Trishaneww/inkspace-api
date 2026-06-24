@@ -26,6 +26,7 @@ type Repository interface {
 	CreateBookingRequest(ctx context.Context, params sqlc.CreateBookingRequestParams) (sqlc.BookingRequest, error)
 	ListBookingRequestsByArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.BookingRequest, error)
 	ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]sqlc.BookingRequest, error)
+	ListConversationFlagsForArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.ListConversationFlagsForArtistRow, error)
 	GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error)
 	UpdateBookingRequestStatus(ctx context.Context, params sqlc.UpdateBookingRequestStatusParams) (sqlc.BookingRequest, error)
 	ReopenBookingRequest(ctx context.Context, params sqlc.ReopenBookingRequestParams) (sqlc.BookingRequest, error)
@@ -120,6 +121,10 @@ func (r *repository) ListBookingRequestsByArtist(ctx context.Context, artistID u
 
 func (r *repository) ListBookingRequestsByClientEmail(ctx context.Context, clientEmail string) ([]sqlc.BookingRequest, error) {
 	return r.q.ListBookingRequestsByClientEmail(ctx, clientEmail)
+}
+
+func (r *repository) ListConversationFlagsForArtist(ctx context.Context, artistID uuid.UUID) ([]sqlc.ListConversationFlagsForArtistRow, error) {
+	return r.q.ListConversationFlagsForArtist(ctx, artistID)
 }
 
 func (r *repository) GetBookingRequest(ctx context.Context, params sqlc.GetBookingRequestParams) (sqlc.BookingRequest, error) {
